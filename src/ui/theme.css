@@ -216,6 +216,137 @@ body {
   font-size: 14px;
 }
 
+/* Общая подпись поля */
+.field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: var(--s-3);
+}
+
+/* Экран старта */
+.start {
+  margin: auto;
+  width: min(440px, 100%);
+  padding: var(--s-12) var(--s-6) var(--s-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+}
+.start__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.start__title {
+  margin: 0;
+  font-size: clamp(44px, 11vw, 76px);
+}
+.start__sub {
+  margin: 0;
+  color: var(--text);
+}
+.start__panel {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  padding: var(--s-6);
+}
+
+.count-seg {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--s-2);
+}
+.count-seg__btn {
+  font-family: var(--font-data);
+  font-size: 18px;
+  padding: var(--s-3) 0;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+.count-seg__btn.is-active {
+  color: var(--ice);
+  border-color: rgba(237, 255, 254, 0.5);
+}
+
+.players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.player-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  transition: opacity 0.18s ease;
+}
+.player-row.is-inactive {
+  opacity: 0.32;
+}
+.player-row__index {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  border: 1px solid var(--hairline);
+  border-radius: 50%;
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+/* Активная строка: светящийся индекс (фирменная точка-pip как маркер «в игре») */
+.player-row:not(.is-inactive) .player-row__index {
+  color: var(--ice);
+  border-color: rgba(237, 255, 254, 0.5);
+  box-shadow: 0 0 10px 1px rgba(237, 255, 254, 0.25);
+}
+.player-row__input {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--heading);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-control);
+  padding: 12px 14px;
+}
+.player-row__input::placeholder {
+  color: var(--text-dim);
+}
+.player-row__input:focus {
+  outline: none;
+  border-color: rgba(237, 255, 254, 0.45);
+}
+.player-row__input:disabled {
+  cursor: not-allowed;
+}
+
+.start__actions {
+  display: flex;
+}
+.start__cta {
+  flex: 1;
+  padding: 16px;
+  font-size: 16px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.001ms !important;
