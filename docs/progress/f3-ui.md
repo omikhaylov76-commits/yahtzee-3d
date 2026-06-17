@@ -1,6 +1,6 @@
 # f3-ui (фича в roadmap: Веха 1 → F3. Игровой UI без 3D)
 
-Последний коммит по фиче: 66243f9 (под-шаг 1)
+Последний коммит по фиче: 0461e94 (под-шаг 2)
 Файлы под-шага (тронем): src/ui/\*\* (новое), src/App.tsx (переделать в роутер экранов),
 src/main.tsx (импорт темы). Ядро/transport/стор (src/core, src/transport, src/state) — НЕ меняем,
 только потребляем через useGameStore. 3D-сцена (src/scene/Scene.tsx) на F3 отложена,
@@ -56,10 +56,11 @@ Desktop:                              Mobile:
      состоянию стора: state=null → Start, phase=playing → Game, phase=over → Winner; экран
      загрузки), `src/main.tsx` (импорт темы), `index.html` (шрифты). Примитивы: Button,
      Eyebrow, Screen-обёртка. 3D Scene отложить.
-- [~] 2. **Экран старта.** Файлы: `src/ui/screens/StartScreen.tsx`. Выбор числа игроков
-  (1–4), поля имён (валидация: непустое/длина, экранирование — React по умолчанию),
-  кнопка Start → `newGame`. Пустые состояния/плейсхолдеры, доступность (label/aria,
-  клавиатура, фокус).
+- [x] 2. **Экран старта.** (0461e94) ВСЕГДА 4 поля (активные подсвечены, лишние приглушены).
+     Файлы: `src/ui/screens/StartScreen.tsx`. Выбор числа игроков
+     (1–4), поля имён (валидация: непустое/длина, экранирование — React по умолчанию),
+     кнопка Start → `newGame`. Пустые состояния/плейсхолдеры, доступность (label/aria,
+     клавиатура, фокус).
 - [ ] 3. **Арена костей + контролы.** Файлы: `src/ui/screens/GameScreen.tsx`,
      `src/ui/components/Dice.tsx`, `src/ui/components/DieFace.tsx`, `src/ui/components/RollCounter.tsx`.
      5 костей-плейсхолдеров с точками (CSS), фиксация кликом/клавишей, кнопка Roll +

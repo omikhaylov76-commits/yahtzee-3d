@@ -237,23 +237,45 @@ body {
   gap: var(--s-8);
 }
 .start__head {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--s-3);
 }
+/* Мягкий луминесцентный ореол за заголовком — глубина «обсерватории» */
+.start__head::before {
+  content: '';
+  position: absolute;
+  left: -10%;
+  top: -30%;
+  width: 70%;
+  height: 160%;
+  background: radial-gradient(closest-side, rgba(0, 130, 124, 0.4), rgba(0, 130, 124, 0) 100%);
+  filter: blur(8px);
+  pointer-events: none;
+  z-index: -1;
+}
 .start__title {
   margin: 0;
   font-size: clamp(44px, 11vw, 76px);
+  text-shadow: 0 0 28px rgba(203, 255, 252, 0.18);
 }
 .start__sub {
   margin: 0;
   color: var(--text);
 }
 .start__panel {
-  background: var(--surface);
+  position: relative;
+  /* Тональная глубина: поверхность чуть светлее сверху + луминесцентный ореол Auros */
+  background:
+    linear-gradient(180deg, rgba(237, 255, 254, 0.04), rgba(237, 255, 254, 0) 38%), var(--surface);
   border: 1px solid var(--hairline);
   border-radius: var(--r-card);
   padding: var(--s-6);
+  box-shadow:
+    inset 0 1px 0 rgba(237, 255, 254, 0.07),
+    0 20px 48px -30px rgba(0, 0, 0, 0.75),
+    0 0 36px -18px rgba(0, 130, 124, 0.55);
 }
 
 .count-seg {
@@ -266,17 +288,23 @@ body {
   font-size: 18px;
   padding: var(--s-3) 0;
   color: var(--text);
-  background: var(--surface-2);
+  background:
+    linear-gradient(180deg, rgba(237, 255, 254, 0.05), rgba(237, 255, 254, 0) 60%), var(--surface-2);
   border: 1px solid transparent;
   border-radius: var(--r-control);
+  box-shadow: inset 0 1px 0 rgba(237, 255, 254, 0.05);
   cursor: pointer;
   transition:
     color 0.12s ease,
-    border-color 0.12s ease;
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 .count-seg__btn.is-active {
   color: var(--ice);
   border-color: rgba(237, 255, 254, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(237, 255, 254, 0.12),
+    0 0 18px -6px rgba(237, 255, 254, 0.35);
 }
 
 .players {
@@ -322,10 +350,12 @@ body {
   font-family: var(--font-body);
   font-size: 16px;
   color: var(--heading);
-  background: var(--surface-2);
+  /* Лёгкая «утопленность» поля: тёмный градиент + внутренняя верхняя тень */
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0) 40%), var(--surface-2);
   border: 1px solid var(--hairline);
   border-radius: var(--r-control);
   padding: 12px 14px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 .player-row__input::placeholder {
   color: var(--text-dim);
