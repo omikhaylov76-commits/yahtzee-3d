@@ -1,4 +1,6 @@
+import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { RoundedBox } from '@react-three/drei';
+import { Group, MeshStandardMaterial } from 'three';
 import { AUROS, DIE_SIZE } from './constants';
 import { pipPositions } from './dieGeometry';
 
@@ -9,10 +11,45 @@ const PIPS = pipPositions();
 const PIP_COLOR = '#04201f';
 
 /**
- * Визуальный кубик (F4.2): скруглённое тело в палитре Auros + 21 пип на гранях.
- * Без физики и без значения — ориентацию задаёт обёртка (PhysicsDie / VALUE_ROTATION).
+ * Императивный доступ к визуалу кости (для DiceField):
+ * - `pipGroup` крутим, чтобы вывести нужное значение вверх БЕЗ поворота тела («проявление»);
+ * - `pipMaterial.opacity` гасим/проявляем точки в зависимости от скорости полёта.
  */
-export function Die3D() {
+export interface DieHandle {
+  pipGroup: Group | null;
+  pipMaterial: MeshStandardMaterial;
+}
+
+/**
+ * Визуальный кубик (F4.3): тело Auros + 21 пип на гранях. Точки вынесены в отдельную группу
+ * с общим прозрачным материалом — так их можно переназначать (поворот группы) и проявлять
+ * (opacity) независимо от физического тела.
+ */
+export const Die3D = forwardRef<DieHandle>(function Die3D(_, ref) {
+  const pipGroup = useRef<Group>(null);
+  const pipMaterial = useMemo(
+    () =>
+      new MeshStandardMaterial({
+        color: PIP_COLOR,
+        roughness: 0.5,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 1,
+      }),
+    [],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      get pipGroup() {
+        return pipGroup.current;
+      },
+      pipMaterial,
+    }),
+    [pipMaterial],
+  );
+
   return (
     <group>
       <RoundedBox
@@ -25,12 +62,13 @@ export function Die3D() {
         <meshStandardMaterial color={AUROS.die} roughness={0.32} metalness={0.16} />
       </RoundedBox>
 
-      {PIPS.map((p, i) => (
-        <mesh key={i} position={p} castShadow>
-          <sphereGeometry args={[0.075, 16, 16]} />
-          <meshStandardMaterial color={PIP_COLOR} roughness={0.5} metalness={0.1} />
-        </mesh>
-      ))}
+      <group ref={pipGroup}>
+        {PIPS.map((p, i) => (
+          <mesh key={i} position={p} material={pipMaterial} castShadow>
+            <sphereGeometry args={[0.075, 16, 16]} />
+          </mesh>
+        ))}
+      </group>
     </group>
   );
-}
+});
