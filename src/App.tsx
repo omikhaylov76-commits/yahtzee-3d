@@ -16,10 +16,15 @@ export function App() {
   const events = useGameStore((s) => s.events);
   const muted = useGameStore((s) => s.muted);
   const volume = useGameStore((s) => s.volume);
+  const ambient = useGameStore((s) => s.ambient);
 
   // Звук (F5): применяем настройки и проигрываем по доменным событиям ядра.
   useEffect(() => soundEngine.setMuted(muted), [muted]);
   useEffect(() => soundEngine.setVolume(volume), [volume]);
+  useEffect(() => {
+    if (ambient) soundEngine.startAmbient();
+    else soundEngine.stopAmbient();
+  }, [ambient]);
   useEffect(() => {
     for (const e of events) {
       const snd = eventToSound(e);

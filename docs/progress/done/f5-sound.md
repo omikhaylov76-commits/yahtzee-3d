@@ -1,6 +1,6 @@
 # f5-sound (фича в roadmap: Веха 1 → F5. Звук)
 
-Последний коммит по фиче: (F5.1 — этим коммитом)
+Последний коммит по фиче: 68177c8 (F5.1)
 Файлы под-шага (тронем): см. по под-шагам ниже
 
 ## Решение (согласовано на старте F5)
@@ -61,7 +61,9 @@ interface SoundEngine {
      Мост событий→звук (эффект в App). UI: mute + громкость (стор + localStorage).
      Тронем: `src/sound/*`, `src/state/gameStore.ts` (muted/volume), `src/ui/components/SoundControl.tsx`,
      `src/App.tsx`. Живьём: бросок → тук, фиксация → клик, mute/громкость работают.
-- [ ] 2. **Остальные звуки + эмбиент + ADR.** score (динь), yahtzee (фанфара), win (аккорд),
+- [x] 2. **Остальные звуки + эмбиент + ADR.** (F5.2 — score (колокол), yahtzee (фанфара),
+     win (аккорд), turn (свуш), denied; эмбиент-пэд + кнопка ≈ (стор/localStorage); ADR 0006 +
+     заметка в architecture. Headless: новые звуки без JS-ошибок.) score (динь), yahtzee (фанфара), win (аккорд),
      turn (свуш), denied; эмбиент-пэд (вкл/выкл). ADR 0006 (процедурный звук) + заметка в
      architecture. Тронем: `src/sound/*`, `docs/adr/0006-*.md`, `docs/architecture.md`.
      Живьём: полный набор звуков + эмбиент по кнопке; всё через громкость/mute.

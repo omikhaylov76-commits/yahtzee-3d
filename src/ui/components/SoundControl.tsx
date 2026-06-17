@@ -4,8 +4,10 @@ import { useGameStore } from '../../state/gameStore';
 export function SoundControl() {
   const muted = useGameStore((s) => s.muted);
   const volume = useGameStore((s) => s.volume);
+  const ambient = useGameStore((s) => s.ambient);
   const setMuted = useGameStore((s) => s.setMuted);
   const setVolume = useGameStore((s) => s.setVolume);
+  const setAmbient = useGameStore((s) => s.setAmbient);
 
   return (
     <div className="sound-control" role="group" aria-label="Sound">
@@ -32,6 +34,16 @@ export function SoundControl() {
           if (muted && v > 0) setMuted(false);
         }}
       />
+      <button
+        type="button"
+        className={`sound-control__btn${ambient ? ' is-on' : ''}`}
+        aria-pressed={ambient}
+        aria-label={ambient ? 'Ambient off' : 'Ambient on'}
+        title="Ambient background"
+        onClick={() => setAmbient(!ambient)}
+      >
+        ≈
+      </button>
     </div>
   );
 }
