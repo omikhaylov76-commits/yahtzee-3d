@@ -5,7 +5,7 @@
  *
  * Под-шаг 2 НЕ содержит правило джокера и бонусные Yahtzee — это добавляется в F1.3.
  */
-import { isYahtzee, scoreCategory, totalScore } from './scoring';
+import { isYahtzee, scoreCategoryWithJoker, totalScore } from './scoring';
 import { rollDie } from './rng';
 import {
   CATEGORIES,
@@ -120,12 +120,22 @@ function applyScore(state: GameState, category: Category): ReduceResult {
   if (category in player.card) return denied(state, 'category-taken');
 
   const values = diceValues(state);
-  const points = scoreCategory(values, category);
+  const isY = isYahtzee(values);
+  // Джокер активен, когда выпал Yahtzee, а бокс yahtzee уже занят (50 или 0).
+  const jokerActive = isY && player.card.yahtzee !== undefined;
+  // Бонус +100 — только если бокс yahtzee занят именно 50 (а не записан нулём).
+  const isBonusYahtzee = isY && player.card.yahtzee === 50;
+
+  const points = scoreCategoryWithJoker(values, category, jokerActive);
 
   const events: DomainEvent[] = [];
-  const updatedPlayer: Player = { ...player, card: { ...player.card, [category]: points } };
-  if (category === 'yahtzee' && isYahtzee(values)) {
-    events.push({ type: 'combo:yahtzee', player: state.current, bonus: false });
+  const updatedPlayer: Player = {
+    ...player,
+    card: { ...player.card, [category]: points },
+    bonusYahtzees: player.bonusYahtzees + (isBonusYahtzee ? 1 : 0),
+  };
+  if (isY) {
+    events.push({ type: 'combo:yahtzee', player: state.current, bonus: isBonusYahtzee });
   }
   events.push({ type: 'score:written', player: state.current, category, points });
 

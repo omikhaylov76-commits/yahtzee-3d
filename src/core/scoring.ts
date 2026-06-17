@@ -94,6 +94,26 @@ export function scoreCategory(dice: DieValue[], cat: Category): number {
   }
 }
 
+/**
+ * Очки за категорию с учётом правила джокера.
+ * Джокер активен, когда выпал Yahtzee, а категория `yahtzee` уже занята (50 или 0):
+ * тогда нижние комбинации засчитываются по полной номинальной стоимости, даже если кости
+ * их «натурально» не образуют (Full House=25, Small=30, Large=40). Остальные категории —
+ * как обычно (верхние = сумма достоинства, 3/4-of-a-kind/chance = сумма костей).
+ */
+export function scoreCategoryWithJoker(
+  dice: DieValue[],
+  cat: Category,
+  jokerActive: boolean,
+): number {
+  if (jokerActive) {
+    if (cat === 'fullHouse') return 25;
+    if (cat === 'smallStraight') return 30;
+    if (cat === 'largeStraight') return 40;
+  }
+  return scoreCategory(dice, cat);
+}
+
 /** Сумма верхней секции карточки (для бонуса). */
 export function upperSum(card: ScoreCard): number {
   return UPPER_CATEGORIES.reduce((acc, c) => acc + (card[c] ?? 0), 0);
