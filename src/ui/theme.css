@@ -1,0 +1,225 @@
+/**
+ * Дизайн-система Yahtzee 3D — стиль Auros (глубокий тёмный океан).
+ * Референс: docs/design-refs/auros-DESIGN.md. Дисциплина Auros: различаем поверхности
+ * ТОНОМ, не тенями; радиусы 6px контролы / 16px карточки; градиент teal->cyan только на
+ * главном действии; сиреневый — дозированно (Yahtzee/победа). Фирменный мотив — точка-pip.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  /* Палитра Auros */
+  --bg: #012624;
+  --surface: #011d1c;
+  --surface-2: #003734;
+  --text: #bbc7c6;
+  --text-dim: #7c918f;
+  --heading: #ffffff;
+  --ice: #edfffe;
+  --lilac: #fde9ff;
+  --grad-primary: linear-gradient(90deg, #00827c 0%, #cbfffc 100%);
+  --teal-dot: #00b3a6;
+  --danger: #ff9a8a;
+  --hairline: rgba(187, 199, 198, 0.14);
+
+  /* Типографика */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-data: 'Space Mono', ui-monospace, monospace;
+
+  /* Шкала отступов (база 4px, Auros — просторно) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+  --s-16: 64px;
+
+  /* Радиусы (дисциплина Auros) */
+  --r-control: 6px;
+  --r-card: 16px;
+  --r-pill: 9999px;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  background: radial-gradient(120% 80% at 50% -10%, #02322f 0%, var(--bg) 55%, #00100f 100%) fixed;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Типографические роли */
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  color: var(--heading);
+}
+
+.heading {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--heading);
+}
+
+.data {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Eyebrow с фирменной светящейся точкой-pip */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.eyebrow::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal-dot);
+  box-shadow: 0 0 8px 1px rgba(0, 179, 166, 0.8);
+}
+
+/* Кнопки */
+.btn {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+  padding: 12px 22px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-control);
+  background: var(--surface-2);
+  color: var(--heading);
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+}
+.btn:hover:not(:disabled) {
+  border-color: rgba(237, 255, 254, 0.4);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border: 0;
+  color: #012624;
+  background: var(--grad-primary);
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.btn-ghost {
+  background: transparent;
+}
+
+:where(button, a, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--ice);
+  outline-offset: 3px;
+  border-radius: var(--r-control);
+}
+
+/* Оболочка экрана */
+.screen {
+  position: relative;
+  min-height: 100dvh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Точка-pip как утилита (счётчики, грани) */
+.pip {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.pip--on {
+  background: var(--ice);
+  box-shadow: 0 0 8px 1px rgba(237, 255, 254, 0.55);
+}
+
+/* Экран загрузки */
+.loading-screen__center {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+}
+.loading-screen__text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+}
+
+/* Временный плейсхолдер экрана (F3.1; заменяется реальными экранами в F3.2–F3.5) */
+.placeholder {
+  margin: auto;
+  max-width: 520px;
+  padding: var(--s-12) var(--s-6);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-5);
+}
+.placeholder__title {
+  margin: 0;
+  font-size: clamp(40px, 9vw, 88px);
+}
+.placeholder__note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
