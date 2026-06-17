@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useGameStore } from './state/gameStore';
 import { eventToSound, soundEngine } from './sound';
 import { SoundControl } from './ui/components/SoundControl';
+import { Celebration } from './ui/components/Celebration';
 import { LoadingScreen } from './ui/screens/LoadingScreen';
 import { StartScreen } from './ui/screens/StartScreen';
 import { GameScreen } from './ui/screens/GameScreen';
@@ -59,6 +60,7 @@ export function App() {
     <>
       {screen}
       <SoundControl />
+      <Celebration />
     </>
   );
 }

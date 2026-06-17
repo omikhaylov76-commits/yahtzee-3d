@@ -857,6 +857,75 @@ body {
   }
 }
 
+/* F6.2: празднование Yahtzee/победы — оверлей частиц + glow (см. Celebration.tsx).
+   Сдержанно, в палитре Auros (сиреневый дозированно). Не перехватывает клики. */
+.celebrate {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.celebrate__glow {
+  width: min(80vw, 660px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(201, 168, 255, 0.42) 0%,
+    rgba(79, 217, 198, 0.16) 38%,
+    transparent 70%
+  );
+  opacity: 0;
+  animation: celebrate-glow 1.1s ease-out both;
+}
+.celebrate[data-kind='win'] .celebrate__glow {
+  width: min(112vw, 1000px);
+}
+@keyframes celebrate-glow {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+.celebrate__spark {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--spark, var(--ice));
+  box-shadow: 0 0 8px 1px var(--spark, var(--ice));
+  opacity: 0;
+  animation: celebrate-spark 1s cubic-bezier(0.16, 1, 0.3, 1) var(--delay, 0ms) both;
+}
+@keyframes celebrate-spark {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--tx, 0), var(--ty, 0)) scale(0.9);
+  }
+}
+/* reduced-motion: тихая статичная вспышка glow без частиц и без движения. */
+.celebrate.is-reduced .celebrate__glow {
+  animation: none;
+  opacity: 0.4;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.001ms !important;
