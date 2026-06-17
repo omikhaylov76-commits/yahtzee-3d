@@ -50,7 +50,9 @@ export function DiceCanvas({ dice }: DiceCanvasProps) {
         <Physics>
           <Table />
           {positions.map((p, i) => (
-            <PhysicsDie key={i} position={p} />
+            // Значение в ключе: до F4.3 (физический бросок) кость «защёлкивается» на новом
+            // значении пересозданием тела. В F4.3 это заменит императивный поворот при покое.
+            <PhysicsDie key={`${i}-${dice[i].value}`} position={p} value={dice[i].value} />
           ))}
         </Physics>
       </Suspense>
