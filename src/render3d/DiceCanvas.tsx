@@ -5,7 +5,7 @@ import { Physics } from '@react-three/rapier';
 import type { Die } from '../core';
 import { AUROS, DIE_HALF } from './constants';
 import { Table } from './Table';
-import { PhysicsDie } from './PhysicsDie';
+import { DiceField } from './DiceField';
 
 interface DiceCanvasProps {
   /** Состояние костей из ядра — пока используем только их количество (5). */
@@ -49,11 +49,7 @@ export function DiceCanvas({ dice }: DiceCanvasProps) {
       <Suspense fallback={null}>
         <Physics>
           <Table />
-          {positions.map((p, i) => (
-            // Значение в ключе: до F4.3 (физический бросок) кость «защёлкивается» на новом
-            // значении пересозданием тела. В F4.3 это заменит императивный поворот при покое.
-            <PhysicsDie key={`${i}-${dice[i].value}`} position={p} value={dice[i].value} />
-          ))}
+          <DiceField dice={dice} positions={positions} />
         </Physics>
       </Suspense>
 

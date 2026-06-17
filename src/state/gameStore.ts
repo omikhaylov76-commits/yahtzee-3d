@@ -15,6 +15,14 @@ export interface GameStoreState {
   state: GameState | null;
   /** События последнего действия (для звука/сочности в F5+). */
   events: DomainEvent[];
+  /**
+   * Кости летят (физический бросок ещё не успокоился) — флаг слоя render3d, НЕ ядра.
+   * Пока true, UI блокирует Roll/контролы; снимается, когда 3D эмитит «успокоились»
+   * (architecture.md: dice:settled — событие render3d).
+   */
+  settling: boolean;
+  /** Слой render3d выставляет/снимает флаг полёта костей. */
+  setSettling: (settling: boolean) => void;
   newGame: (players: { name: string }[]) => void;
   roll: () => void;
   toggleHold: (index: number) => void;
@@ -24,9 +32,11 @@ export interface GameStoreState {
 
 /** Собрать стор поверх произвольного транспорта (используется и в тестах с MemoryStorage). */
 export function createGameStore(transport: Transport): StoreApi<GameStoreState> {
-  const store = createStore<GameStoreState>(() => ({
+  const store = createStore<GameStoreState>((set) => ({
     state: transport.getState(),
     events: [],
+    settling: false,
+    setSettling: (settling) => set({ settling }),
     newGame: (players) => transport.dispatch({ type: 'NEW_GAME', players }),
     roll: () => transport.dispatch({ type: 'ROLL' }),
     toggleHold: (index) => transport.dispatch({ type: 'TOGGLE_HOLD', index }),

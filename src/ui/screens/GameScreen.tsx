@@ -27,6 +27,7 @@ function deniedMessage(reason: string): string {
 export function GameScreen() {
   const state = useGameStore((s) => s.state);
   const events = useGameStore((s) => s.events);
+  const settling = useGameStore((s) => s.settling);
   const roll = useGameStore((s) => s.roll);
 
   const [denied, setDenied] = useState<{ msg: string; key: number } | null>(null);
@@ -44,7 +45,8 @@ export function GameScreen() {
   if (!state) return null; // роутер не покажет этот экран без партии
 
   const current = state.players[state.current];
-  const canRoll = state.phase === 'playing' && state.rollsLeft > 0;
+  // Пока кости летят (settling), бросок недоступен — ждём, когда 3D их «успокоит».
+  const canRoll = state.phase === 'playing' && state.rollsLeft > 0 && !settling;
   const canHold = state.phase === 'playing' && state.rolledThisTurn && state.rollsLeft > 0;
 
   return (
@@ -63,10 +65,14 @@ export function GameScreen() {
 
           <div className="controls">
             <Button variant="primary" className="roll-btn" onClick={roll} disabled={!canRoll}>
-              {state.rolledThisTurn ? 'Roll again' : 'Roll dice'}
+              {settling ? 'Rolling…' : state.rolledThisTurn ? 'Roll again' : 'Roll dice'}
             </Button>
             <p className="controls__hint">
-              {canHold ? 'Tap a die to hold it.' : 'Roll up to 3 times, then score.'}
+              {settling
+                ? 'Dice are rolling…'
+                : canHold
+                  ? 'Tap a die to hold it.'
+                  : 'Roll up to 3 times, then score.'}
             </p>
           </div>
 
