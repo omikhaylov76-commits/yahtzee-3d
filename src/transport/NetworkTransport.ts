@@ -19,6 +19,10 @@ export class NetworkTransport implements Transport {
     throw new Error(NOT_IMPLEMENTED);
   }
 
+  reset(): void {
+    throw new Error(NOT_IMPLEMENTED);
+  }
+
   subscribe(): () => void {
     throw new Error(NOT_IMPLEMENTED);
   }

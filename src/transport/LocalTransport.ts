@@ -47,6 +47,12 @@ export class LocalTransport implements Transport {
     this.emit(events);
   }
 
+  reset(): void {
+    this.state = null;
+    this.storage.clear();
+    this.emit([]);
+  }
+
   subscribe(listener: TransportListener): () => void {
     this.listeners.add(listener);
     return () => {

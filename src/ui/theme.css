@@ -195,27 +195,6 @@ body {
   letter-spacing: 0.1em;
 }
 
-/* Временный плейсхолдер экрана (F3.1; заменяется реальными экранами в F3.2–F3.5) */
-.placeholder {
-  margin: auto;
-  max-width: 520px;
-  padding: var(--s-12) var(--s-6);
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--s-5);
-}
-.placeholder__title {
-  margin: 0;
-  font-size: clamp(40px, 9vw, 88px);
-}
-.placeholder__note {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 14px;
-}
-
 /* Общая подпись поля */
 .field-label {
   display: block;
@@ -544,13 +523,6 @@ body {
     inset 0 1px 0 rgba(237, 255, 254, 0.07),
     0 20px 48px -30px rgba(0, 0, 0, 0.75);
 }
-.board--placeholder {
-  min-height: 320px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-4);
-}
-
 /* ───────── Таблица счёта (F3.4) ───────── */
 .score-table {
   padding: var(--s-5) var(--s-5) var(--s-6);
@@ -671,9 +643,103 @@ body {
   color: var(--heading);
 }
 
+/* ───────── Экран победителя (F3.5) ───────── */
+.winner__inner {
+  margin: auto;
+  width: min(460px, 100%);
+  padding: var(--s-12) var(--s-6) var(--s-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+}
+.winner__head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  text-align: center;
+  align-items: center;
+}
+.winner__head::before {
+  content: '';
+  position: absolute;
+  inset: -40% 10% auto 10%;
+  height: 180%;
+  background: radial-gradient(closest-side, rgba(253, 233, 255, 0.22), rgba(253, 233, 255, 0) 100%);
+  filter: blur(10px);
+  pointer-events: none;
+  z-index: -1;
+}
+.winner__title {
+  margin: 0;
+  font-size: clamp(40px, 9vw, 72px);
+  text-shadow: 0 0 32px rgba(253, 233, 255, 0.3);
+}
+
+.standings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.standing {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) var(--s-5);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+}
+.standing.is-winner {
+  border-color: rgba(253, 233, 255, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(253, 233, 255, 0.18),
+    0 0 30px -10px rgba(253, 233, 255, 0.5);
+}
+.standing__rank {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+.standing.is-winner .standing__rank {
+  color: var(--lilac);
+}
+.standing__name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--heading);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.standing__total {
+  font-size: 22px;
+  color: var(--heading);
+}
+
+.winner__actions {
+  display: flex;
+  gap: var(--s-3);
+}
+.winner__actions .btn {
+  flex: 1;
+  padding: 15px;
+}
+
 @media (max-width: 760px) {
   .game__layout {
     grid-template-columns: 1fr;
+  }
+  /* Таблица счёта: на узком экране даём горизонтальную прокрутку, колонки не сплющиваются */
+  .score-table {
+    overflow-x: auto;
+  }
+  .srow {
+    grid-template-columns: 92px repeat(var(--cols), minmax(48px, 1fr));
+    min-width: calc(92px + var(--cols) * 48px);
   }
 }
 

@@ -13,6 +13,8 @@ export interface Transport {
   getState(): GameState | null;
   /** Отправить действие в игру. */
   dispatch(action: Action): void;
+  /** Сбросить партию: очистить сохранение и вернуться к «нет партии» (экран старта). */
+  reset(): void;
   /** Подписаться на обновления. Возвращает функцию отписки. */
   subscribe(listener: TransportListener): () => void;
 }

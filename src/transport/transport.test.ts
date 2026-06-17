@@ -62,6 +62,18 @@ describe('LocalTransport', () => {
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
+  it('reset очищает партию и сохранение, уведомляет null', () => {
+    const storage = new MemoryGameStorage();
+    const t = new LocalTransport(storage);
+    const seen: Array<GameState | null> = [];
+    t.dispatch({ type: 'NEW_GAME', players, seed: 1 });
+    t.subscribe((s) => seen.push(s));
+    t.reset();
+    expect(t.getState()).toBeNull();
+    expect(storage.load()).toBeNull();
+    expect(seen[seen.length - 1]).toBeNull();
+  });
+
   it('подставляет случайный seed, если он не задан (через инъекцию makeSeed)', () => {
     const makeSeed = vi.fn(() => 123);
     const t = new LocalTransport(new MemoryGameStorage(), makeSeed);
@@ -77,5 +89,6 @@ describe('NetworkTransport (заглушка)', () => {
     expect(() => t.getState()).toThrow(/не реализован/);
     expect(() => t.dispatch()).toThrow(/не реализован/);
     expect(() => t.subscribe()).toThrow(/не реализован/);
+    expect(() => t.reset()).toThrow(/не реализован/);
   });
 });

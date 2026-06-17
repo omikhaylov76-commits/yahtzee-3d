@@ -19,6 +19,7 @@ export interface GameStoreState {
   roll: () => void;
   toggleHold: (index: number) => void;
   score: (category: Category) => void;
+  reset: () => void;
 }
 
 /** Собрать стор поверх произвольного транспорта (используется и в тестах с MemoryStorage). */
@@ -30,6 +31,7 @@ export function createGameStore(transport: Transport): StoreApi<GameStoreState> 
     roll: () => transport.dispatch({ type: 'ROLL' }),
     toggleHold: (index) => transport.dispatch({ type: 'TOGGLE_HOLD', index }),
     score: (category) => transport.dispatch({ type: 'SCORE', category }),
+    reset: () => transport.reset(),
   }));
 
   // Обновления транспорта зеркалим в стор (состояние + события последнего действия).
