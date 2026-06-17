@@ -1,15 +1,18 @@
 import type { Category, GameState } from '../../core';
+import type { CellFlash } from './ScoreTable';
 import { CATEGORY_LABELS, previewFor, recorded } from '../scoreView';
 
 interface CategoryRowProps {
   state: GameState;
   category: Category;
   onScore: (category: Category) => void;
+  /** Ячейка, которую только что записали — для пульса (F6.1). */
+  flash?: CellFlash | null;
 }
 
 /** Строка категории: подпись + ячейка на игрока. У активного игрока свободная ячейка —
  *  кликабельное превью очков; заполненная показывает записанное; чужие/недоступные — точка. */
-export function CategoryRow({ state, category, onScore }: CategoryRowProps) {
+export function CategoryRow({ state, category, onScore, flash }: CategoryRowProps) {
   const preview = previewFor(state, category);
   const label = CATEGORY_LABELS[category];
 
@@ -24,8 +27,13 @@ export function CategoryRow({ state, category, onScore }: CategoryRowProps) {
         const cls = `scell data${isCurrent ? ' is-current' : ''}`;
 
         if (value !== undefined) {
+          const justScored = flash?.player === i && flash?.category === category;
           return (
-            <div key={i} className={`${cls} is-filled`} role="cell">
+            <div
+              key={i}
+              className={`${cls} is-filled${justScored ? ' is-justscored' : ''}`}
+              role="cell"
+            >
               {value}
             </div>
           );

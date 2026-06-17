@@ -217,6 +217,18 @@ body {
   width: 100%;
   display: flex;
   flex-direction: column;
+  /* F6.1: мягкий вход экрана при смене Start/Game/Winner (отключается reduced-motion). */
+  animation: screen-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Точка-pip как утилита (счётчики, грани) */
@@ -808,6 +820,40 @@ body {
   .srow {
     grid-template-columns: 92px repeat(var(--cols), minmax(48px, 1fr));
     min-width: calc(92px + var(--cols) * 48px);
+  }
+}
+
+/* F6.1: микроанимации записи очков и смены игрока (событийно из ядра, см. ScoreTable).
+   Сдержанно: короткий «поп» ячейки + тёплый glow имени. Reduced-motion гасит ниже. */
+.scell.is-justscored {
+  animation: cell-pop 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes cell-pop {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 0 rgba(79, 217, 198, 0);
+  }
+  35% {
+    transform: scale(1.14);
+    box-shadow: 0 0 14px 2px rgba(79, 217, 198, 0.5);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(79, 217, 198, 0);
+  }
+}
+.scell--name.is-turnflash {
+  animation: turn-glow 0.6s ease both;
+}
+@keyframes turn-glow {
+  0% {
+    text-shadow: none;
+  }
+  40% {
+    text-shadow: 0 0 12px rgba(237, 255, 254, 0.7);
+  }
+  100% {
+    text-shadow: none;
   }
 }
 
