@@ -18,3 +18,22 @@ export const AUROS = {
 export const DIE_SIZE = 0.9;
 /** Половина ребра (для раскладки/высоты покоя). */
 export const DIE_HALF = DIE_SIZE / 2;
+
+/**
+ * Геометрия арены и параметры физики — ЕДИНЫЙ источник для видимого стола (Table) и
+ * headless-предсказателя (predictor). Любое расхождение здесь = дрейф предсказания, поэтому
+ * держим в одном месте.
+ */
+export const ARENA = {
+  halfX: 4, // полуразмер зоны по X (бортики)
+  halfZ: 3, // полуразмер зоны по Z
+  wallHalfH: 3, // полувысота бортиков
+  floorHalfY: 0.5, // полутолщина пола (верхняя грань на y=0)
+} as const;
+
+export const PHYS = {
+  gravityY: -9.81,
+  timeStep: 1 / 60,
+  friction: 0.85,
+  restitution: 0.15,
+} as const;

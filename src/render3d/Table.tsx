@@ -1,18 +1,15 @@
 import { CuboidCollider, RigidBody } from '@react-three/rapier';
-import { AUROS } from './constants';
-
-/** Полуразмер игровой зоны по X и Z — в этих пределах кости удерживаются бортиками. */
-const ARENA_X = 4;
-const ARENA_Z = 3;
-/** Высота невидимых бортиков (полувысота коллайдера). */
-const WALL_H = 3;
+import { ARENA, AUROS, PHYS } from './constants';
 
 /**
  * «Стол» арены (F4.1): видимая поверхность + физика.
- * Физика — статичное тело: пол (кубоид-коллайдер, верхняя грань на y=0) и четыре
- * невидимых бортика, чтобы брошенные кости не улетали за пределы кадра.
+ * Параметры зоны/физики берём из общих констант (ARENA/PHYS) — теми же пользуется
+ * headless-предсказатель, иначе предсказание грани разойдётся с показом.
  */
 export function Table() {
+  const x = ARENA.halfX;
+  const z = ARENA.halfZ;
+  const h = ARENA.wallHalfH;
   return (
     <>
       {/* Видимая поверхность стола */}
@@ -22,14 +19,19 @@ export function Table() {
       </mesh>
 
       {/* Статичная физика: пол + бортики (невидимые) */}
-      <RigidBody type="fixed" colliders={false} friction={0.85} restitution={0.15}>
+      <RigidBody
+        type="fixed"
+        colliders={false}
+        friction={PHYS.friction}
+        restitution={PHYS.restitution}
+      >
         {/* Пол: толстый кубоид, верхняя грань ровно на y=0 */}
-        <CuboidCollider args={[20, 0.5, 20]} position={[0, -0.5, 0]} />
+        <CuboidCollider args={[20, ARENA.floorHalfY, 20]} position={[0, -ARENA.floorHalfY, 0]} />
         {/* Бортики по периметру арены */}
-        <CuboidCollider args={[0.5, WALL_H, ARENA_Z]} position={[-ARENA_X, WALL_H, 0]} />
-        <CuboidCollider args={[0.5, WALL_H, ARENA_Z]} position={[ARENA_X, WALL_H, 0]} />
-        <CuboidCollider args={[ARENA_X, WALL_H, 0.5]} position={[0, WALL_H, -ARENA_Z]} />
-        <CuboidCollider args={[ARENA_X, WALL_H, 0.5]} position={[0, WALL_H, ARENA_Z]} />
+        <CuboidCollider args={[0.5, h, z]} position={[-x, h, 0]} />
+        <CuboidCollider args={[0.5, h, z]} position={[x, h, 0]} />
+        <CuboidCollider args={[x, h, 0.5]} position={[0, h, -z]} />
+        <CuboidCollider args={[x, h, 0.5]} position={[0, h, z]} />
       </RigidBody>
     </>
   );
