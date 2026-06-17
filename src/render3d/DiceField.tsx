@@ -27,24 +27,28 @@ const KEPT_GAP = 0.72;
 const KEPT_SCALE = 0.6; // компактный скромный ряд
 const MOVE_LERP = 9; // скорость переезда в рядок и обратно (доля к цели в секунду)
 const MOVE_DONE = 0.02; // порог «доехала»
+const GATHER_TIME = 0.7; // c — плавный «сбор» костей в ряд на новый ход
 
-type Phase = 'rest' | 'thrown' | 'reorient' | 'fadein' | 'replay';
+type Phase = 'rest' | 'thrown' | 'reorient' | 'fadein' | 'replay' | 'gather';
 
 interface Runtime {
   phase: Phase;
   calm: number;
-  t: number; // прогресс доворота ('reorient')
+  t: number; // прогресс доворота/сбора ('reorient'/'gather')
   fade: number; // прогресс проявления ('reveal')
   frame: number; // текущий кадр записи ('presim')
   acc: number; // накопитель времени для шага записи ('presim')
   placement: 'free' | 'kept'; // где кость: в зоне броска или в рядке отложенных (F4.4b)
-  q0: Quaternion;
+  q0: Quaternion; // стартовый поворот тела (доворот/сбор)
   qT: Quaternion;
-  rest: Vector3;
+  pip0: Quaternion; // стартовый поворот группы точек (сбор)
+  from: Vector3; // стартовая позиция (сбор)
+  rest: Vector3; // целевая позиция
 }
 
 const ZERO = { x: 0, y: 0, z: 0 };
 const WORLD_UP = new Vector3(0, 1, 0);
+const IDENTITY_Q = new Quaternion();
 
 // Переиспользуемые temp-объекты (без аллокаций в кадре).
 const _l = new Vector3();
@@ -188,6 +192,8 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
       placement: 'free' as 'free' | 'kept',
       q0: new Quaternion(),
       qT: new Quaternion(),
+      pip0: new Quaternion(),
+      from: new Vector3(),
       rest: new Vector3(),
     })),
   );
@@ -203,11 +209,37 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
   const posRef = useRef(positions);
   posRef.current = positions;
 
-  // Бросок: реагируем только на новое событие dice:rolled.
   useEffect(() => {
-    if (!events.some((e) => e.type === 'dice:rolled')) return;
     const ds = diceRef.current;
     const ps = posRef.current;
+
+    // Смена хода (после записи ядро сбрасывает кости): ПЛАВНО собираем кости в ровный ряд и
+    // доворачиваем на значения ядра (свежие «1»). Без этого тело↔разметка рассинхронятся и у
+    // следующего игрока на кубиках случайные числа.
+    if (events.some((e) => e.type === 'turn:changed')) {
+      active.current = true;
+      for (let i = 0; i < bodies.current.length; i++) {
+        const body = bodies.current[i];
+        const handle = handles.current[i];
+        const rt = runtimes.current[i];
+        if (!body || !rt) continue;
+        const p = ps[i];
+        const tr = body.translation();
+        rt.from.set(tr.x, tr.y, tr.z);
+        rt.rest.set(p[0], DIE_HALF, p[2]);
+        const r = body.rotation();
+        rt.q0.set(r.x, r.y, r.z, r.w); // тело: от текущей позы к identity
+        rt.pip0.copy(handle?.pipGroup?.quaternion ?? IDENTITY_Q); // точки: от текущей разметки к identity
+        rt.t = 0;
+        rt.phase = 'gather';
+        rt.placement = 'free';
+        if (handle) handle.pipMaterial.opacity = 1;
+      }
+      return;
+    }
+
+    // Бросок: реагируем только на новое событие dice:rolled.
+    if (!events.some((e) => e.type === 'dice:rolled')) return;
     throwTime.current = 0;
     active.current = true;
     setSettling(true);
@@ -376,6 +408,21 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
         rt.fade = Math.min(1, rt.fade + delta / FADE_TIME);
         if (handle) handle.pipMaterial.opacity = FLIGHT_OPACITY + (1 - FLIGHT_OPACITY) * rt.fade;
         if (rt.fade >= 1) rt.phase = 'rest';
+      } else if (rt.phase === 'gather') {
+        // Плавный сбор на новый ход: позиция → ряд, тело → identity, точки → identity, масштаб → 1.
+        // Верхняя грань мягко «докатывается» от прежнего значения к «1» (без резкого скачка).
+        allRest = false;
+        rt.t = Math.min(1, rt.t + delta / GATHER_TIME);
+        const e = easeOutCubic(rt.t);
+        _p.copy(rt.from).lerp(rt.rest, e);
+        body.setTranslation({ x: _p.x, y: _p.y, z: _p.z }, true);
+        _R.copy(rt.q0).slerp(IDENTITY_Q, e);
+        body.setRotation(_R, true);
+        body.setLinvel(ZERO, false);
+        body.setAngvel(ZERO, false);
+        if (handle?.pipGroup) handle.pipGroup.quaternion.copy(rt.pip0).slerp(IDENTITY_Q, e);
+        lerpScale(handle, 1, delta);
+        if (rt.t >= 1) rt.phase = 'rest';
       }
     }
 

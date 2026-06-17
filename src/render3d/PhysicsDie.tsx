@@ -1,4 +1,4 @@
-import { forwardRef, type Ref } from 'react';
+import { forwardRef, useRef, type Ref } from 'react';
 import { CuboidCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier';
 import type { DieValue } from '../core';
 import { DIE_HALF } from './constants';
@@ -25,12 +25,17 @@ export const PhysicsDie = forwardRef<RapierRigidBody, PhysicsDieProps>(function 
   { position, value, onSelect, dieRef },
   ref,
 ) {
+  // Стартовый поворот фиксируем на момент монтирования. Иначе при смене value (сброс костей
+  // на новый ход) меняется проп rotation, и @react-three/rapier переустанавливает позу тела —
+  // тело крутится, а разметка точек остаётся старой → случайные значения. Ориентацией дальше
+  // полностью правит DiceField.
+  const initialRotation = useRef(VALUE_ROTATION[value]).current;
   return (
     <RigidBody
       ref={ref}
       colliders={false}
       position={position}
-      rotation={VALUE_ROTATION[value]}
+      rotation={initialRotation}
       friction={0.85}
       restitution={0.15}
     >
