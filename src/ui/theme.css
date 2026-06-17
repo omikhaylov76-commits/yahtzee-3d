@@ -393,6 +393,20 @@ body {
 }
 
 /* Кости */
+/* 3D-арена костей (F4): контейнер задаёт высоту, R3F-canvas заполняет его. */
+.dice-arena {
+  width: 100%;
+  height: clamp(240px, 40vh, 380px);
+  border-radius: var(--r-lg, 18px);
+  overflow: hidden;
+}
+.dice-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 2D-кости (fallback без WebGL, подключается в F4.5). */
 .dice {
   display: flex;
   gap: var(--s-4);

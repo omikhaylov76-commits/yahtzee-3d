@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Screen } from '../components/Screen';
 import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
-import { Dice } from '../components/Dice';
 import { RollCounter } from '../components/RollCounter';
 import { ScoreTable } from '../components/ScoreTable';
+import { DiceCanvas } from '../../render3d/DiceCanvas';
 import { useGameStore } from '../../state/gameStore';
 
 /** Понятное сообщение для отклонённого действия (из доменных событий ядра). */
@@ -28,7 +28,6 @@ export function GameScreen() {
   const state = useGameStore((s) => s.state);
   const events = useGameStore((s) => s.events);
   const roll = useGameStore((s) => s.roll);
-  const toggleHold = useGameStore((s) => s.toggleHold);
 
   const [denied, setDenied] = useState<{ msg: string; key: number } | null>(null);
   const nonce = useRef(0);
@@ -58,12 +57,9 @@ export function GameScreen() {
             <RollCounter rollsLeft={state.rollsLeft} />
           </header>
 
-          <Dice
-            dice={state.dice}
-            canHold={canHold}
-            blank={!state.rolledThisTurn}
-            onToggle={toggleHold}
-          />
+          <div className="dice-arena">
+            <DiceCanvas dice={state.dice} />
+          </div>
 
           <div className="controls">
             <Button variant="primary" className="roll-btn" onClick={roll} disabled={!canRoll}>
