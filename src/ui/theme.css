@@ -7,6 +7,19 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
 
+/* Только для скринридеров: визуально скрыто, но доступно ассистивным технологиям. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 :root {
   /* Палитра Auros */
   --bg: #012624;
@@ -461,14 +474,17 @@ body {
   border: 1px solid rgba(253, 233, 255, 0.4);
 }
 
-/* Грань: точки на сетке 3×3 */
+/* Грань: точки на сетке 3×3.
+   Позиционируем АБСОЛЮТНО внутри .die (position: relative) через inset — иначе внутри
+   <button> процентная ширина дочернего элемента резолвится в 0 и сетка схлопывается
+   (точки не рисуются, пустые квадраты). */
 .die-face {
+  position: absolute;
+  inset: 14%;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-rows: repeat(3, 1fr);
   gap: 8%;
-  width: 100%;
-  height: 100%;
 }
 .die-face__cell {
   border-radius: 50%;

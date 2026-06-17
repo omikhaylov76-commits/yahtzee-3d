@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Screen } from '../components/Screen';
 import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
+import { Dice } from '../components/Dice';
 import { RollCounter } from '../components/RollCounter';
 import { ScoreTable } from '../components/ScoreTable';
 import { DiceCanvas } from '../../render3d/DiceCanvas';
+import { hasWebGL, prefersReducedMotion } from '../capabilities';
 import { useGameStore } from '../../state/gameStore';
 
 /** Понятное сообщение для отклонённого действия (из доменных событий ядра). */
@@ -29,7 +31,11 @@ export function GameScreen() {
   const events = useGameStore((s) => s.events);
   const settling = useGameStore((s) => s.settling);
   const roll = useGameStore((s) => s.roll);
+  const toggleHold = useGameStore((s) => s.toggleHold);
   const nudge = useGameStore((s) => s.nudge);
+
+  // 3D-арена только при WebGL и без reduced-motion; иначе — статичные 2D-кости (F4.5).
+  const use3D = useMemo(() => hasWebGL() && !prefersReducedMotion(), []);
 
   const [denied, setDenied] = useState<{ msg: string; key: number } | null>(null);
   const nonce = useRef(0);
@@ -63,23 +69,44 @@ export function GameScreen() {
             <RollCounter rollsLeft={state.rollsLeft} />
           </header>
 
-          <div className="dice-arena">
-            <DiceCanvas dice={state.dice} canHold={canHold} />
-          </div>
+          {use3D ? (
+            <>
+              <div className="dice-arena">
+                <DiceCanvas dice={state.dice} canHold={canHold} />
+              </div>
+              {/* Скринридерам: значения 3D-костей (canvas им «непрозрачен») */}
+              <p className="sr-only" role="status" aria-live="polite">
+                {state.rolledThisTurn
+                  ? `Dice: ${state.dice
+                      .map((d) => `${d.value}${d.held ? ' held' : ''}`)
+                      .join(', ')}`
+                  : 'Dice not rolled yet'}
+              </p>
+            </>
+          ) : (
+            <Dice
+              dice={state.dice}
+              canHold={canHold}
+              blank={!state.rolledThisTurn}
+              onToggle={toggleHold}
+            />
+          )}
 
           <div className="controls">
             <Button variant="primary" className="roll-btn" onClick={roll} disabled={!canRoll}>
               {settling ? 'Rolling…' : state.rolledThisTurn ? 'Roll again' : 'Roll dice'}
             </Button>
-            <Button
-              variant="ghost"
-              className="nudge-btn"
-              onClick={nudge}
-              disabled={!canNudge}
-              title="Shake the table — dice hop and settle (values unchanged)"
-            >
-              Nudge
-            </Button>
+            {use3D && (
+              <Button
+                variant="ghost"
+                className="nudge-btn"
+                onClick={nudge}
+                disabled={!canNudge}
+                title="Shake the table — dice hop and settle (values unchanged)"
+              >
+                Nudge
+              </Button>
+            )}
             <p className="controls__hint">
               {settling
                 ? 'Dice are rolling…'
