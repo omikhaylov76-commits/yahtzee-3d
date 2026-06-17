@@ -4,6 +4,7 @@ import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
 import { Dice } from '../components/Dice';
 import { RollCounter } from '../components/RollCounter';
+import { ScoreTable } from '../components/ScoreTable';
 import { useGameStore } from '../../state/gameStore';
 
 /** Понятное сообщение для отклонённого действия (из доменных событий ядра). */
@@ -78,10 +79,7 @@ export function GameScreen() {
           </p>
         </section>
 
-        <aside className="board board--placeholder">
-          <Eyebrow>Score</Eyebrow>
-          <p className="placeholder__note">Score table — F3.4</p>
-        </aside>
+        <ScoreTable />
       </div>
     </Screen>
   );

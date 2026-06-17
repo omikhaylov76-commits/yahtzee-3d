@@ -551,6 +551,126 @@ body {
   gap: var(--s-4);
 }
 
+/* ───────── Таблица счёта (F3.4) ───────── */
+.score-table {
+  padding: var(--s-5) var(--s-5) var(--s-6);
+  display: flex;
+  flex-direction: column;
+}
+.srow {
+  display: grid;
+  grid-template-columns: minmax(104px, 1.3fr) repeat(var(--cols), minmax(40px, 1fr));
+  align-items: center;
+  border-bottom: 1px solid var(--hairline);
+}
+.srow:last-child {
+  border-bottom: 0;
+}
+.srow__label {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text);
+  padding: 9px 8px 9px 0;
+}
+/* Все ячейки — одинаковая коробка (высота + прозрачная рамка), чтобы строки НЕ «дышали»
+   при смене активного игрока, когда превью-кнопка переезжает в другую колонку. */
+.scell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  margin: 0;
+  padding: 6px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  box-sizing: border-box;
+  font-family: var(--font-data);
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-dim);
+  appearance: none;
+}
+.scell.is-current {
+  background: rgba(0, 130, 124, 0.12);
+}
+.scell.is-filled {
+  color: var(--heading);
+}
+
+/* Шапка с именами */
+.srow--head {
+  border-bottom-color: rgba(237, 255, 254, 0.2);
+}
+.scell--name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  padding-top: 4px;
+  padding-bottom: 10px;
+  overflow: hidden;
+}
+.scell--name.is-current {
+  color: var(--ice);
+}
+.scell__name-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scell__turn {
+  flex: none;
+}
+
+/* Подзаголовки секций */
+.srow--section .srow__label {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-top: var(--s-4);
+}
+
+/* Кликабельное превью очков */
+.scell--preview {
+  color: var(--ice);
+  background: rgba(0, 130, 124, 0.18);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.1s ease;
+}
+.scell--preview:hover {
+  background: rgba(203, 255, 252, 0.22);
+  border-color: rgba(237, 255, 254, 0.5);
+}
+.scell--preview:active {
+  transform: scale(0.96);
+}
+
+/* Бонус / итог */
+.srow--total {
+  border-top: 1px solid rgba(237, 255, 254, 0.2);
+  border-bottom: 0;
+  margin-top: var(--s-2);
+}
+.srow--total .srow__label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--heading);
+}
+.scell--total {
+  font-size: 19px;
+  color: var(--heading);
+}
+
 @media (max-width: 760px) {
   .game__layout {
     grid-template-columns: 1fr;
