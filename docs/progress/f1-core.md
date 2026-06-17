@@ -1,6 +1,6 @@
 # f1-core (фича в roadmap: Веха 1 → F1. Ядро правил и счёта)
 
-Последний коммит по фиче: нет
+Последний коммит по фиче: 2a21085 (под-шаг 1)
 Файлы под-шага (тронем): см. по под-шагам ниже. ЯДРО чистое — без React/3D/звука/DOM.
 
 Цель F1: детерминированное «ядро» игры на чистом TS, покрытое тестами (Vitest):
@@ -42,16 +42,16 @@
 
 ## Под-шаги
 
-- [~] 1. **Типы + счёт категорий.** Файлы: `src/core/types.ts`, `src/core/scoring.ts`,
-  `src/core/scoring.test.ts`. Чистые функции: `scoreCategory(dice, cat)`, `upperSum(card)`,
-  `totalScore(player)` (категории + верхний бонус +35 при верх≥63 + бонусные Yahtzee×100).
-  Тесты на каждую категорию и бонус.
-- [ ] 2. **RNG + reducer хода.** Файлы: `src/core/rng.ts`, `src/core/game.ts`,
-     `src/core/index.ts` (barrel), `src/core/game.test.ts`. Сидируемый ГПСЧ (mulberry32),
-     `createGame`, `reduce` для NEW_GAME/ROLL/TOGGLE_HOLD/SCORE (БЕЗ джокера пока: yahtzee=50
-     как обычно), смена хода, конец игры, победитель, события, отказы (denied). Тесты:
-     детерминизм по seed, лимит 3 броска, hold/переброс, запрет недоступного, полный матч на
-     2 игрока до game:over.
+- [x] 1. **Типы + счёт категорий.** (2a21085) Файлы: `src/core/types.ts`, `src/core/scoring.ts`,
+     `src/core/scoring.test.ts`. Чистые функции: `scoreCategory(dice, cat)`, `upperSum(card)`,
+     `totalScore(player)` (категории + верхний бонус +35 при верх≥63 + бонусные Yahtzee×100).
+     Тесты на каждую категорию и бонус. 13 тестов зелёные.
+- [~] 2. **RNG + reducer хода.** Файлы: `src/core/rng.ts`, `src/core/game.ts`,
+  `src/core/index.ts` (barrel), `src/core/game.test.ts`. Сидируемый ГПСЧ (mulberry32),
+  `createGame`, `reduce` для NEW_GAME/ROLL/TOGGLE_HOLD/SCORE (БЕЗ джокера пока: yahtzee=50
+  как обычно), смена хода, конец игры, победитель, события, отказы (denied). Тесты:
+  детерминизм по seed, лимит 3 броска, hold/переброс, запрет недоступного, полный матч на
+  2 игрока до game:over.
 - [ ] 3. **Бонусные Yahtzee + джокер.** Файлы: правки `src/core/scoring.ts` и
      `src/core/game.ts`, тесты `src/core/joker.test.ts`. Если выпал Yahtzee, а категория
      yahtzee уже занята 50 → +100 (bonusYahtzees++); запись по правилу джокера (верхняя по
