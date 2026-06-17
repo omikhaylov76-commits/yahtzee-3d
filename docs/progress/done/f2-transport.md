@@ -1,6 +1,6 @@
 # f2-transport (фича в roadmap: Веха 1 → F2. Transport + Storage + стор)
 
-Последний коммит по фиче: 363a53c (под-шаг 2)
+Последний коммит по фиче: cc8fa30 (под-шаг 3) — ФИЧА F2 ЗАКРЫТА
 Файлы под-шага (тронем): см. по под-шагам. Слои вокруг ядра; ядро (src/core) НЕ меняем.
 
 Цель F2: «провод» между ядром и будущим UI/3D/звуком — по контрактам из architecture.md:
@@ -46,12 +46,12 @@ interface Transport {
      state+events; персист в memoryStorage; восстановление из storage при создании;
      NetworkTransport кидает.
 
-- [~] 3. **Zustand-стор (мост).** Зависимость: добавить `zustand` (согласовано в стеке).
-  Файлы: `src/state/gameStore.ts` (фабрика `createGameStore(transport)` + дефолтный
-  `useGameStore` на LocalTransport+localStorage; поля: `state`, `events`; методы
-  `newGame(players)`, `roll()`, `toggleHold(i)`, `score(cat)` — все через transport;
-  подписка на transport обновляет стор), `src/state/gameStore.test.ts` (vanilla-стор:
-  newGame наполняет state, roll/score меняют state через мост, restore из storage).
+- [x] 3. **Zustand-стор (мост).** (cc8fa30) Зависимость: добавлен `zustand` (согласовано в стеке).
+     Файлы: `src/state/gameStore.ts` (фабрика `createGameStore(transport)` + дефолтный
+     `useGameStore` на LocalTransport+localStorage; поля: `state`, `events`; методы
+     `newGame(players)`, `roll()`, `toggleHold(i)`, `score(cat)` — все через transport;
+     подписка на transport обновляет стор), `src/state/gameStore.test.ts` (vanilla-стор:
+     newGame наполняет state, roll/score меняют state через мост, restore из storage).
 
 ## Граничные случаи
 

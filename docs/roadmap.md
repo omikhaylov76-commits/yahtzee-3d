@@ -12,8 +12,9 @@ merged: no
 - [x] **F1. Ядро правил и счёта** (чистый TS + тесты) — типы `GameState`, RNG, `reduce`,
       13 категорий, верхний бонус, бонусные Yahtzee, джокер, конец игры/победитель. 34 теста
       Vitest. Без UI/3D. (2a21085, 3f26e55, 516d1ce; docs/progress/done/f1-core.md)
-- [ ] **F2. Transport + Storage + стор** — `Transport` (LocalTransport), `NetworkTransport`
+- [x] **F2. Transport + Storage + стор** — `Transport` (LocalTransport), `NetworkTransport`
       заглушка, `GameStorage` (localStorage, автосохранение/восстановление), Zustand-мост.
+      22 теста (storage/transport/store). (80e6c84, 363a53c, cc8fa30; done/f2-transport.md)
 - [ ] **F3. Игровой UI без 3D** — экраны старт/игра/победитель, таблица 13 категорий с
       превью очков, контролы (Roll, hold по клику в списке, запись), состояния (ход/броски/
       недоступно/загрузка/ошибка). Кости пока простые (плейсхолдер), чтобы пройти полный матч.
