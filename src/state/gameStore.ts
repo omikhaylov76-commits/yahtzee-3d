@@ -30,6 +30,11 @@ export interface GameStoreState {
   nudgeNonce: number;
   /** UI зовёт, чтобы «вздрогнул стол» — кости подпрыгнут и доваляются на те же значения. */
   nudge: () => void;
+  /** Настройки звука (F5): выключен ли звук и громкость 0..1. Сохраняются в localStorage. */
+  muted: boolean;
+  volume: number;
+  setMuted: (muted: boolean) => void;
+  setVolume: (volume: number) => void;
   newGame: (players: { name: string }[]) => void;
   roll: () => void;
   toggleHold: (index: number) => void;
@@ -37,15 +42,54 @@ export interface GameStoreState {
   reset: () => void;
 }
 
+const SOUND_KEY = 'yahtzee.sound.v1';
+
+/** Прочитать настройки звука из localStorage (с безопасными значениями по умолчанию). */
+function loadSound(): { muted: boolean; volume: number } {
+  try {
+    const raw = localStorage.getItem(SOUND_KEY);
+    if (raw) {
+      const v = JSON.parse(raw) as { muted?: boolean; volume?: number };
+      return {
+        muted: !!v.muted,
+        volume: typeof v.volume === 'number' ? Math.max(0, Math.min(1, v.volume)) : 0.6,
+      };
+    }
+  } catch {
+    // повреждённые/недоступные данные — дефолт
+  }
+  return { muted: false, volume: 0.6 };
+}
+
+function saveSound(muted: boolean, volume: number): void {
+  try {
+    localStorage.setItem(SOUND_KEY, JSON.stringify({ muted, volume }));
+  } catch {
+    // localStorage недоступен — настройки живут в памяти сессии
+  }
+}
+
 /** Собрать стор поверх произвольного транспорта (используется и в тестах с MemoryStorage). */
 export function createGameStore(transport: Transport): StoreApi<GameStoreState> {
-  const store = createStore<GameStoreState>((set) => ({
+  const sound = loadSound();
+  const store = createStore<GameStoreState>((set, get) => ({
     state: transport.getState(),
     events: [],
     settling: false,
     setSettling: (settling) => set({ settling }),
     nudgeNonce: 0,
     nudge: () => set((s) => ({ nudgeNonce: s.nudgeNonce + 1 })),
+    muted: sound.muted,
+    volume: sound.volume,
+    setMuted: (muted) => {
+      set({ muted });
+      saveSound(muted, get().volume);
+    },
+    setVolume: (volume) => {
+      const v = Math.max(0, Math.min(1, volume));
+      set({ volume: v });
+      saveSound(get().muted, v);
+    },
     newGame: (players) => transport.dispatch({ type: 'NEW_GAME', players }),
     roll: () => transport.dispatch({ type: 'ROLL' }),
     toggleHold: (index) => transport.dispatch({ type: 'TOGGLE_HOLD', index }),

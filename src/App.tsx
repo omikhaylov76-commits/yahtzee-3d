@@ -1,40 +1,59 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from './state/gameStore';
+import { eventToSound, soundEngine } from './sound';
+import { SoundControl } from './ui/components/SoundControl';
 import { LoadingScreen } from './ui/screens/LoadingScreen';
 import { StartScreen } from './ui/screens/StartScreen';
 import { GameScreen } from './ui/screens/GameScreen';
 import { WinnerScreen } from './ui/screens/WinnerScreen';
 
 /**
- * Корневой роутер экранов. Экран выбирается по состоянию игры из стора:
- *   нет партии        -> Start
- *   phase === 'over'  -> Winner
- *   иначе             -> Game
- * 3D-сцена вернётся в игровой экран в F4.
+ * Корневой роутер экранов + глобальный звуковой мост (F5). Экран выбирается по состоянию игры:
+ *   нет партии -> Start, phase === 'over' -> Winner, иначе -> Game.
  */
-
-type ScreenKind = 'start' | 'game' | 'winner';
-
 export function App() {
   const state = useGameStore((s) => s.state);
+  const events = useGameStore((s) => s.events);
+  const muted = useGameStore((s) => s.muted);
+  const volume = useGameStore((s) => s.volume);
 
-  // Состояние «загрузка»: вместо пустого экрана — лоадер до первого кадра (в F5 сюда
-  // подключится реальная загрузка ассетов 3D/звука).
+  // Звук (F5): применяем настройки и проигрываем по доменным событиям ядра.
+  useEffect(() => soundEngine.setMuted(muted), [muted]);
+  useEffect(() => soundEngine.setVolume(volume), [volume]);
+  useEffect(() => {
+    for (const e of events) {
+      const snd = eventToSound(e);
+      if (snd) soundEngine.play(snd);
+    }
+  }, [events]);
+  // Разблокировать AudioContext по первому жесту (политика автоплея браузеров).
+  useEffect(() => {
+    const unlock = () => soundEngine.unlock();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => window.removeEventListener('pointerdown', unlock);
+  }, []);
+
+  // Состояние «загрузка»: лоадер до первого кадра (в F5+ — реальная загрузка ассетов).
   const [ready, setReady] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setReady(true));
     return () => cancelAnimationFrame(id);
   }, []);
-  if (!ready) return <LoadingScreen />;
 
-  const screen: ScreenKind = !state ? 'start' : state.phase === 'over' ? 'winner' : 'game';
+  const screen = !ready ? (
+    <LoadingScreen />
+  ) : !state ? (
+    <StartScreen />
+  ) : state.phase === 'over' ? (
+    <WinnerScreen />
+  ) : (
+    <GameScreen />
+  );
 
-  switch (screen) {
-    case 'start':
-      return <StartScreen />;
-    case 'game':
-      return <GameScreen />;
-    case 'winner':
-      return <WinnerScreen />;
-  }
+  return (
+    <>
+      {screen}
+      <SoundControl />
+    </>
+  );
 }

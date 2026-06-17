@@ -6,7 +6,7 @@ import { Dice } from '../components/Dice';
 import { RollCounter } from '../components/RollCounter';
 import { ScoreTable } from '../components/ScoreTable';
 import { DiceCanvas } from '../../render3d/DiceCanvas';
-import { hasWebGL, prefersReducedMotion } from '../capabilities';
+import { hasWebGL } from '../capabilities';
 import { useGameStore } from '../../state/gameStore';
 
 /** Понятное сообщение для отклонённого действия (из доменных событий ядра). */
@@ -34,8 +34,10 @@ export function GameScreen() {
   const toggleHold = useGameStore((s) => s.toggleHold);
   const nudge = useGameStore((s) => s.nudge);
 
-  // 3D-арена только при WebGL и без reduced-motion; иначе — статичные 2D-кости (F4.5).
-  const use3D = useMemo(() => hasWebGL() && !prefersReducedMotion(), []);
+  // 3D-арена при наличии WebGL. 2D-кости — fallback ТОЛЬКО когда WebGL недоступен (F4.5).
+  // reduced-motion больше не загоняет в 2D (3D — ядро впечатления); деликатный «reduced 3D»
+  // (мгновенный бросок без тумбла) — в backlog на F6.
+  const use3D = useMemo(() => hasWebGL(), []);
 
   const [denied, setDenied] = useState<{ msg: string; key: number } | null>(null);
   const nonce = useRef(0);

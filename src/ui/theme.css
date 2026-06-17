@@ -7,6 +7,39 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap');
 
+/* Контрол звука (F5): компактный, в правом верхнем углу. */
+.sound-control {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(1, 29, 28, 0.6);
+  border: 1px solid rgba(237, 255, 254, 0.12);
+  backdrop-filter: blur(6px);
+}
+.sound-control__btn {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px;
+  opacity: 0.85;
+}
+.sound-control__btn:hover {
+  opacity: 1;
+}
+.sound-control__range {
+  width: 76px;
+  accent-color: var(--cyan, #4fd9c6);
+  cursor: pointer;
+}
+
 /* Только для скринридеров: визуально скрыто, но доступно ассистивным технологиям. */
 .sr-only {
   position: absolute;
