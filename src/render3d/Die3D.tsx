@@ -25,7 +25,10 @@ export interface DieHandle {
  * с общим прозрачным материалом — так их можно переназначать (поворот группы) и проявлять
  * (opacity) независимо от физического тела.
  */
-export const Die3D = forwardRef<DieHandle>(function Die3D(_, ref) {
+export const Die3D = forwardRef<DieHandle, { held?: boolean }>(function Die3D(
+  { held = false },
+  ref,
+) {
   const pipGroup = useRef<Group>(null);
   const pipMaterial = useMemo(
     () =>
@@ -51,7 +54,8 @@ export const Die3D = forwardRef<DieHandle>(function Die3D(_, ref) {
   );
 
   return (
-    <group>
+    // Held: лёгкое увеличение всего кубика (равномерно, не зависит от ориентации тела).
+    <group scale={held ? 1.06 : 1}>
       <RoundedBox
         args={[DIE_SIZE, DIE_SIZE, DIE_SIZE]}
         radius={0.1}
@@ -59,7 +63,14 @@ export const Die3D = forwardRef<DieHandle>(function Die3D(_, ref) {
         castShadow
         receiveShadow
       >
-        <meshStandardMaterial color={AUROS.die} roughness={0.32} metalness={0.16} />
+        {/* Held: тёплое лиловое свечение Auros как видимый отклик фиксации. */}
+        <meshStandardMaterial
+          color={AUROS.die}
+          roughness={0.32}
+          metalness={0.16}
+          emissive={held ? '#fde9ff' : '#000000'}
+          emissiveIntensity={held ? 0.45 : 0}
+        />
       </RoundedBox>
 
       <group ref={pipGroup}>

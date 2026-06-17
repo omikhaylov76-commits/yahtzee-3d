@@ -121,6 +121,8 @@ function makeThrow(p: [number, number, number]): DieThrow {
 interface DiceFieldProps {
   dice: Die[];
   positions: [number, number, number][];
+  /** Можно ли сейчас фиксировать кости кликом (ход, после броска, не в полёте). */
+  canHold: boolean;
 }
 
 /**
@@ -129,7 +131,7 @@ interface DiceFieldProps {
  * предрасчёт броска → переразметка точек один раз → воспроизведение записи. На время полёта
  * держит флаг `settling` (гейт UI). Held не трогает.
  */
-export function DiceField({ dice, positions }: DiceFieldProps) {
+export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
   const { rapier } = useRapier();
   const bodies = useRef<(RapierRigidBody | null)[]>([]);
   const handles = useRef<(DieHandle | null)[]>([]);
@@ -152,6 +154,7 @@ export function DiceField({ dice, positions }: DiceFieldProps) {
 
   const events = useGameStore((s) => s.events);
   const setSettling = useGameStore((s) => s.setSettling);
+  const toggleHold = useGameStore((s) => s.toggleHold);
 
   const diceRef = useRef(dice);
   diceRef.current = dice;
@@ -316,6 +319,8 @@ export function DiceField({ dice, positions }: DiceFieldProps) {
           dieRef={(el) => (handles.current[i] = el)}
           position={p}
           value={dice[i].value}
+          held={dice[i].held}
+          onSelect={canHold ? () => toggleHold(i) : undefined}
         />
       ))}
     </>

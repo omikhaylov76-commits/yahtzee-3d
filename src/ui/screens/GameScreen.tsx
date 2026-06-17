@@ -47,7 +47,8 @@ export function GameScreen() {
   const current = state.players[state.current];
   // Пока кости летят (settling), бросок недоступен — ждём, когда 3D их «успокоит».
   const canRoll = state.phase === 'playing' && state.rollsLeft > 0 && !settling;
-  const canHold = state.phase === 'playing' && state.rolledThisTurn && state.rollsLeft > 0;
+  const canHold =
+    state.phase === 'playing' && state.rolledThisTurn && state.rollsLeft > 0 && !settling;
 
   return (
     <Screen className="game">
@@ -60,7 +61,7 @@ export function GameScreen() {
           </header>
 
           <div className="dice-arena">
-            <DiceCanvas dice={state.dice} />
+            <DiceCanvas dice={state.dice} canHold={canHold} />
           </div>
 
           <div className="controls">

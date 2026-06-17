@@ -8,8 +8,10 @@ import { Table } from './Table';
 import { DiceField } from './DiceField';
 
 interface DiceCanvasProps {
-  /** Состояние костей из ядра — пока используем только их количество (5). */
+  /** Состояние костей из ядра (значения + held). */
   dice: Die[];
+  /** Можно ли фиксировать кости кликом (прокидывается в DiceField). */
+  canHold: boolean;
 }
 
 /** Раскладка костей ровным рядом по центру стола. */
@@ -23,7 +25,7 @@ function layout(count: number): [number, number, number][] {
  * 3D-арена костей (F4.1): R3F-сцена с физикой Rapier, столом, светом и тенями в палитре
  * Auros. Показывает 5 костей, покоящихся на столе. Бросок/значения/фиксация — F4.2–F4.4.
  */
-export function DiceCanvas({ dice }: DiceCanvasProps) {
+export function DiceCanvas({ dice, canHold }: DiceCanvasProps) {
   const positions = layout(dice.length);
   return (
     <Canvas
@@ -49,7 +51,7 @@ export function DiceCanvas({ dice }: DiceCanvasProps) {
       <Suspense fallback={null}>
         <Physics>
           <Table />
-          <DiceField dice={dice} positions={positions} />
+          <DiceField dice={dice} positions={positions} canHold={canHold} />
         </Physics>
       </Suspense>
 

@@ -10,17 +10,21 @@ interface PhysicsDieProps {
   position: [number, number, number];
   /** Значение из ядра — задаёт начальную грань вверх (дальше ориентацией правит DiceField). */
   value: DieValue;
+  /** Зафиксирована ли кость (F4.4) — визуальный отклик (свечение + увеличение). */
+  held?: boolean;
+  /** Клик/тап по кости (фиксация). Если не задан — кость некликабельна. */
+  onSelect?: () => void;
   /** Ref на визуал кости (группа точек + материал) — для режима «проявление». */
   dieRef?: Ref<DieHandle>;
 }
 
 /**
- * Одна физическая кость (F4.3): кубик с пипсами в Rapier-теле. Наружу прокидываются два ref:
- * само тело (бросок/доворот) и визуал точек (переназначение значения + проявление). Коллайдер
- * задаём явно по ребру кубика, чтобы выпуклые пипсы его не «раздували».
+ * Одна физическая кость (F4.4): кубик с пипсами в Rapier-теле. Наружу прокидываются два ref:
+ * само тело (бросок/воспроизведение) и визуал точек. Клик по кубику фиксирует/освобождает
+ * (когда `onSelect` задан). Коллайдер задаём явно по ребру — выпуклые пипсы его не «раздувают».
  */
 export const PhysicsDie = forwardRef<RapierRigidBody, PhysicsDieProps>(function PhysicsDie(
-  { position, value, dieRef },
+  { position, value, held = false, onSelect, dieRef },
   ref,
 ) {
   return (
@@ -32,7 +36,21 @@ export const PhysicsDie = forwardRef<RapierRigidBody, PhysicsDieProps>(function 
       friction={0.85}
       restitution={0.15}
     >
-      <Die3D ref={dieRef} />
+      <group
+        onClick={(e) => {
+          if (!onSelect) return;
+          e.stopPropagation();
+          onSelect();
+        }}
+        onPointerOver={() => {
+          if (onSelect) document.body.style.cursor = 'pointer';
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = 'auto';
+        }}
+      >
+        <Die3D ref={dieRef} held={held} />
+      </group>
       <CuboidCollider args={[DIE_HALF, DIE_HALF, DIE_HALF]} />
     </RigidBody>
   );
