@@ -1,6 +1,6 @@
 # f2-transport (фича в roadmap: Веха 1 → F2. Transport + Storage + стор)
 
-Последний коммит по фиче: 80e6c84 (под-шаг 1)
+Последний коммит по фиче: 363a53c (под-шаг 2)
 Файлы под-шага (тронем): см. по под-шагам. Слои вокруг ядра; ядро (src/core) НЕ меняем.
 
 Цель F2: «провод» между ядром и будущим UI/3D/звуком — по контрактам из architecture.md:
@@ -36,22 +36,22 @@ interface Transport {
      `src/storage/storage.test.ts`. Тесты: save→load round-trip, clear, повреждённый JSON →
      null, отсутствие ключа → null.
 
-- [~] 2. **Transport.** Файлы: `src/transport/Transport.ts` (интерфейс + тип колбэка),
-  `src/transport/LocalTransport.ts` (хранит state; NEW_GAME → createGame с СЛУЧАЙНЫМ seed,
-  инъекция seed на границе — ядро остаётся чистым; прочие действия → reduce; после каждого
-  dispatch save в GameStorage и notify подписчиков с событиями; при старте load из
-  storage — восстановление партии), `src/transport/NetworkTransport.ts` (пустой класс-
-  заглушка, методы кидают «не реализовано, Веха 2», TODO-точка под сервер),
-  `src/transport/transport.test.ts`. Тесты: dispatch применяет reduce; подписчики получают
-  state+events; персист в memoryStorage; восстановление из storage при создании;
-  NetworkTransport кидает.
+- [x] 2. **Transport.** (363a53c) Файлы: `src/transport/Transport.ts` (интерфейс + тип колбэка),
+     `src/transport/LocalTransport.ts` (хранит state; NEW_GAME → createGame с СЛУЧАЙНЫМ seed,
+     инъекция seed на границе — ядро остаётся чистым; прочие действия → reduce; после каждого
+     dispatch save в GameStorage и notify подписчиков с событиями; при старте load из
+     storage — восстановление партии), `src/transport/NetworkTransport.ts` (пустой класс-
+     заглушка, методы кидают «не реализовано, Веха 2», TODO-точка под сервер),
+     `src/transport/transport.test.ts`. Тесты: dispatch применяет reduce; подписчики получают
+     state+events; персист в memoryStorage; восстановление из storage при создании;
+     NetworkTransport кидает.
 
-- [ ] 3. **Zustand-стор (мост).** Зависимость: добавить `zustand` (согласовано в стеке).
-     Файлы: `src/state/gameStore.ts` (фабрика `createGameStore(transport)` + дефолтный
-     `useGameStore` на LocalTransport+localStorage; поля: `state`, `events`; методы
-     `newGame(players)`, `roll()`, `toggleHold(i)`, `score(cat)` — все через transport;
-     подписка на transport обновляет стор), `src/state/gameStore.test.ts` (vanilla-стор:
-     newGame наполняет state, roll/score меняют state через мост, restore из storage).
+- [~] 3. **Zustand-стор (мост).** Зависимость: добавить `zustand` (согласовано в стеке).
+  Файлы: `src/state/gameStore.ts` (фабрика `createGameStore(transport)` + дефолтный
+  `useGameStore` на LocalTransport+localStorage; поля: `state`, `events`; методы
+  `newGame(players)`, `roll()`, `toggleHold(i)`, `score(cat)` — все через transport;
+  подписка на transport обновляет стор), `src/state/gameStore.test.ts` (vanilla-стор:
+  newGame наполняет state, roll/score меняют state через мост, restore из storage).
 
 ## Граничные случаи
 
