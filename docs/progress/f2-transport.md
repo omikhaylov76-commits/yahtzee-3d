@@ -1,6 +1,6 @@
 # f2-transport (фича в roadmap: Веха 1 → F2. Transport + Storage + стор)
 
-Последний коммит по фиче: нет
+Последний коммит по фиче: 80e6c84 (под-шаг 1)
 Файлы под-шага (тронем): см. по под-шагам. Слои вокруг ядра; ядро (src/core) НЕ меняем.
 
 Цель F2: «провод» между ядром и будущим UI/3D/звуком — по контрактам из architecture.md:
@@ -29,22 +29,22 @@ interface Transport {
 
 ## Под-шаги
 
-- [~] 1. **Storage.** Файлы: `src/storage/GameStorage.ts` (интерфейс),
-  `src/storage/localStorageGameStorage.ts` (реализация: версионированный ключ
-  `yahtzee3d:v1:game`, try/catch, повреждённое/иная версия → null, clear),
-  `src/storage/memoryGameStorage.ts` (для тестов и SSR-фолбэка),
-  `src/storage/storage.test.ts`. Тесты: save→load round-trip, clear, повреждённый JSON →
-  null, отсутствие ключа → null.
+- [x] 1. **Storage.** (80e6c84) Файлы: `src/storage/GameStorage.ts` (интерфейс),
+     `src/storage/localStorageGameStorage.ts` (реализация: версионированный ключ
+     `yahtzee3d:v1:game`, try/catch, повреждённое/иная версия → null, clear),
+     `src/storage/memoryGameStorage.ts` (для тестов и SSR-фолбэка),
+     `src/storage/storage.test.ts`. Тесты: save→load round-trip, clear, повреждённый JSON →
+     null, отсутствие ключа → null.
 
-- [ ] 2. **Transport.** Файлы: `src/transport/Transport.ts` (интерфейс + тип колбэка),
-     `src/transport/LocalTransport.ts` (хранит state; NEW_GAME → createGame с СЛУЧАЙНЫМ seed,
-     инъекция seed на границе — ядро остаётся чистым; прочие действия → reduce; после каждого
-     dispatch save в GameStorage и notify подписчиков с событиями; при старте load из
-     storage — восстановление партии), `src/transport/NetworkTransport.ts` (пустой класс-
-     заглушка, методы кидают «не реализовано, Веха 2», TODO-точка под сервер),
-     `src/transport/transport.test.ts`. Тесты: dispatch применяет reduce; подписчики получают
-     state+events; персист в memoryStorage; восстановление из storage при создании;
-     NetworkTransport кидает.
+- [~] 2. **Transport.** Файлы: `src/transport/Transport.ts` (интерфейс + тип колбэка),
+  `src/transport/LocalTransport.ts` (хранит state; NEW_GAME → createGame с СЛУЧАЙНЫМ seed,
+  инъекция seed на границе — ядро остаётся чистым; прочие действия → reduce; после каждого
+  dispatch save в GameStorage и notify подписчиков с событиями; при старте load из
+  storage — восстановление партии), `src/transport/NetworkTransport.ts` (пустой класс-
+  заглушка, методы кидают «не реализовано, Веха 2», TODO-точка под сервер),
+  `src/transport/transport.test.ts`. Тесты: dispatch применяет reduce; подписчики получают
+  state+events; персист в memoryStorage; восстановление из storage при создании;
+  NetworkTransport кидает.
 
 - [ ] 3. **Zustand-стор (мост).** Зависимость: добавить `zustand` (согласовано в стеке).
      Файлы: `src/state/gameStore.ts` (фабрика `createGameStore(transport)` + дефолтный
