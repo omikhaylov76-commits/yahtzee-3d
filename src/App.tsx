@@ -4,6 +4,7 @@ import { Screen } from './ui/components/Screen';
 import { Eyebrow } from './ui/components/Eyebrow';
 import { LoadingScreen } from './ui/screens/LoadingScreen';
 import { StartScreen } from './ui/screens/StartScreen';
+import { GameScreen } from './ui/screens/GameScreen';
 
 /**
  * Корневой роутер экранов (F3.1). Экран выбирается по состоянию игры из стора:
@@ -47,7 +48,7 @@ export function App() {
     case 'start':
       return <StartScreen />;
     case 'game':
-      return <Placeholder eyebrow="In play" title="Your turn" note="Game board — F3.3" />;
+      return <GameScreen />;
     case 'winner':
       return <Placeholder eyebrow="Game over" title="Winner" note="Winner screen — F3.5" />;
   }

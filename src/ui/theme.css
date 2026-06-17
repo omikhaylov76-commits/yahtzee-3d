@@ -377,6 +377,186 @@ body {
   font-size: 16px;
 }
 
+/* ───────── Игровой экран (F3.3) ───────── */
+.game {
+  padding: var(--s-6);
+}
+.game__layout {
+  margin: auto;
+  width: min(1080px, 100%);
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: var(--s-6);
+  align-items: start;
+}
+
+.arena {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-8);
+  padding: var(--s-10) var(--s-6);
+}
+.turn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+}
+.turn__name {
+  margin: 0;
+  font-size: clamp(28px, 5vw, 44px);
+}
+
+.roll-counter {
+  display: flex;
+  gap: var(--s-2);
+}
+
+/* Кости */
+.dice {
+  display: flex;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.die {
+  position: relative;
+  width: clamp(56px, 13vw, 78px);
+  aspect-ratio: 1;
+  padding: 14%;
+  border-radius: 14px;
+  border: 1px solid rgba(237, 255, 254, 0.16);
+  background:
+    linear-gradient(160deg, rgba(237, 255, 254, 0.12), rgba(237, 255, 254, 0) 55%), var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 rgba(237, 255, 254, 0.18),
+    0 14px 28px -18px rgba(0, 0, 0, 0.8);
+  cursor: pointer;
+  transition:
+    transform 0.14s ease,
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
+}
+.die:not(.is-static):hover {
+  transform: translateY(-3px);
+  border-color: rgba(237, 255, 254, 0.4);
+}
+.die.is-static {
+  cursor: default;
+}
+.die.is-held {
+  border-color: var(--lilac);
+  box-shadow:
+    inset 0 1px 0 rgba(237, 255, 254, 0.2),
+    0 0 22px -4px rgba(253, 233, 255, 0.5);
+  transform: translateY(-4px);
+}
+.die__tag {
+  position: absolute;
+  bottom: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-body);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lilac);
+  background: var(--surface);
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(253, 233, 255, 0.4);
+}
+
+/* Грань: точки на сетке 3×3 */
+.die-face {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 8%;
+  width: 100%;
+  height: 100%;
+}
+.die-face__cell {
+  border-radius: 50%;
+}
+.die-face__cell--on {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #9fded9 75%);
+  box-shadow: 0 0 6px rgba(237, 255, 254, 0.45);
+}
+
+/* Контролы */
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+}
+.roll-btn {
+  min-width: 180px;
+  padding: 16px 28px;
+  font-size: 16px;
+}
+.controls__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.denied {
+  margin: 0;
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--danger);
+  opacity: 0;
+}
+.denied.is-shown {
+  opacity: 1;
+  animation: shake 0.36s ease;
+}
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+/* Правая колонка (плейсхолдер таблицы до F3.4) */
+.board {
+  background:
+    linear-gradient(180deg, rgba(237, 255, 254, 0.04), rgba(237, 255, 254, 0) 38%), var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  padding: var(--s-6);
+  box-shadow:
+    inset 0 1px 0 rgba(237, 255, 254, 0.07),
+    0 20px 48px -30px rgba(0, 0, 0, 0.75);
+}
+.board--placeholder {
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+@media (max-width: 760px) {
+  .game__layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.001ms !important;

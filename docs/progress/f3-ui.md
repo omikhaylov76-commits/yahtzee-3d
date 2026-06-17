@@ -61,11 +61,11 @@ Desktop:                              Mobile:
      (1–4), поля имён (валидация: непустое/длина, экранирование — React по умолчанию),
      кнопка Start → `newGame`. Пустые состояния/плейсхолдеры, доступность (label/aria,
      клавиатура, фокус).
-- [ ] 3. **Арена костей + контролы.** Файлы: `src/ui/screens/GameScreen.tsx`,
-     `src/ui/components/Dice.tsx`, `src/ui/components/DieFace.tsx`, `src/ui/components/RollCounter.tsx`.
-     5 костей-плейсхолдеров с точками (CSS), фиксация кликом/клавишей, кнопка Roll +
-     счётчик бросков (pips), баннер «чей ход», отклик на недоступное действие (shake +
-     сообщение, из событий action:denied).
+- [~] 3. **Арена костей + контролы.** Файлы: `src/ui/screens/GameScreen.tsx`,
+  `src/ui/components/Dice.tsx`, `src/ui/components/DieFace.tsx`, `src/ui/components/RollCounter.tsx`.
+  5 костей-плейсхолдеров с точками (CSS), фиксация кликом/клавишей, кнопка Roll +
+  счётчик бросков (pips), баннер «чей ход», отклик на недоступное действие (shake +
+  сообщение, из событий action:denied).
 - [ ] 4. **Таблица счёта (манифест).** Файлы: `src/ui/components/ScoreTable.tsx`,
      `src/ui/components/CategoryRow.tsx`, `src/ui/scoreView.ts` (хелперы превью/итогов поверх
      ядра: доступные категории, превью очков текущего броска, верхняя сумма/бонус, итог).
