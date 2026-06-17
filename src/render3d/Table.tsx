@@ -62,7 +62,8 @@ export function Table() {
         <CuboidCollider args={[0.5, h, depthHalf]} position={[-x, h, midZ]} />
         <CuboidCollider args={[0.5, h, depthHalf]} position={[x, h, midZ]} />
         <CuboidCollider args={[x, h, 0.5]} position={[0, h, ARENA.backZ]} />
-        <CuboidCollider args={[x, h, 0.5]} position={[0, h, ARENA.frontZ]} />
+        {/* Передней стенки нет: бросок летит «от меня» В стол; от переднего края кости
+            держит финальный кламп зоны (никаких полочек, на которых кость зависала бы). */}
       </RigidBody>
     </>
   );

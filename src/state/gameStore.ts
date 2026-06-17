@@ -23,6 +23,13 @@ export interface GameStoreState {
   settling: boolean;
   /** Слой render3d выставляет/снимает флаг полёта костей. */
   setSettling: (settling: boolean) => void;
+  /**
+   * Счётчик «потрясти стол» (Nudge) — косметический толчок костей, НЕ Action ядра и НЕ меняет
+   * значения (честность/сеть). Растёт на каждое нажатие; render3d реагирует на изменение.
+   */
+  nudgeNonce: number;
+  /** UI зовёт, чтобы «вздрогнул стол» — кости подпрыгнут и доваляются на те же значения. */
+  nudge: () => void;
   newGame: (players: { name: string }[]) => void;
   roll: () => void;
   toggleHold: (index: number) => void;
@@ -37,6 +44,8 @@ export function createGameStore(transport: Transport): StoreApi<GameStoreState> 
     events: [],
     settling: false,
     setSettling: (settling) => set({ settling }),
+    nudgeNonce: 0,
+    nudge: () => set((s) => ({ nudgeNonce: s.nudgeNonce + 1 })),
     newGame: (players) => transport.dispatch({ type: 'NEW_GAME', players }),
     roll: () => transport.dispatch({ type: 'ROLL' }),
     toggleHold: (index) => transport.dispatch({ type: 'TOGGLE_HOLD', index }),

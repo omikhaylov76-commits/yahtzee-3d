@@ -154,12 +154,30 @@ function targetQuat(value: DieValue, current: Quaternion): Quaternion {
 /** Случайные стартовые условия броска для предсказателя. */
 function makeThrow(p: [number, number, number]): DieThrow {
   const q = new Quaternion().setFromEuler(new Euler(rand(Math.PI), rand(Math.PI), rand(Math.PI)));
+  // ~30% костей — «раскатчики»: иногда катятся подальше (интрига, что выпадет).
+  const roller = Math.random() < 0.3;
+  const fwd = roller ? 5.2 + Math.random() * 1.6 : 3.8 + Math.random() * 1.1; // скорость вперёд (−z)
+  const fan = roller ? 1.6 + Math.random() * 0.9 : 0.9 + Math.random() * 0.7; // лёгкий разлёт вбок
+  const outward = p[0] >= 0 ? 1 : -1;
+  const rollX = -fwd / DIE_HALF; // угловая под КАЧЕНИЕ вперёд (без проскальзывания)
   return {
-    pos: [p[0] + rand(0.4), 2.6 + Math.random() * 0.6, p[2] + rand(0.3)],
+    // Бросок «от меня В ЭКРАН»: старт ПЕРЕД передним бортиком (близко к камере), кости влетают
+    // над низким бортиком, приземляются близко и КАТЯТСЯ вперёд (−z), кувыркаясь, к середине.
+    pos: [p[0] * 0.8 + rand(0.3), 1.9 + Math.random() * 0.3, 2.5 + rand(0.2)],
     rot: [q.x, q.y, q.z, q.w],
-    // По глубине (z) разлёт минимальный — кости ложатся на ОДНОЙ глубине, видимый размер ровный.
-    lin: [rand(1.8), -2 - Math.random() * 2, rand(0.9)],
-    ang: [rand(12), rand(12), rand(12)],
+    lin: [outward * fan + rand(0.6), -0.5 - Math.random() * 0.5, -fwd],
+    ang: [rollX + rand(2.0), rand(2.5), rand(2.0)], // в основном качение по X + лёгкий вобл
+  };
+}
+
+/** «Подскок» Nudge: из текущей позы кости — толчок вверх + умеренный спин (в зоне броска). */
+function makeNudge(pos: [number, number, number], rot: [number, number, number, number]): DieThrow {
+  return {
+    pos: [pos[0], pos[1] + 0.05, pos[2]],
+    rot,
+    // Толчок вверх компенсирует возросшую гравитацию (хоп виден, но небольшой).
+    lin: [rand(1.0), 3.4 + Math.random() * 1.0, rand(1.0)],
+    ang: [rand(7), rand(7), rand(7)],
   };
 }
 
@@ -203,6 +221,7 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
   const events = useGameStore((s) => s.events);
   const setSettling = useGameStore((s) => s.setSettling);
   const toggleHold = useGameStore((s) => s.toggleHold);
+  const nudgeNonce = useGameStore((s) => s.nudgeNonce);
 
   const diceRef = useRef(dice);
   diceRef.current = dice;
@@ -301,6 +320,46 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
       body.setAngvel({ x: t.ang[0], y: t.ang[1], z: t.ang[2] }, true);
     }
   }, [events, setSettling, rapier]);
+
+  // Nudge: косметический «подскок» лежащих костей в зоне броска на ТЕ ЖЕ значения ядра.
+  // Предрасчёт от текущих поз → переразметка под значения → воспроизведение (как бросок,
+  // но без re-roll: значения не меняются — честно и сетебезопасно).
+  useEffect(() => {
+    if (nudgeNonce === 0) return; // стартовое значение, не трясём
+    const ds = diceRef.current;
+    const idx: number[] = [];
+    const throws: DieThrow[] = [];
+    for (let i = 0; i < bodies.current.length; i++) {
+      const body = bodies.current[i];
+      const rt = runtimes.current[i];
+      if (!body || !rt) continue;
+      if (ds[i]?.held || rt.phase !== 'rest') continue; // только лежащие в игре кости
+      const tr = body.translation();
+      const r = body.rotation();
+      throws.push(makeNudge([tr.x, tr.y, tr.z], [r.x, r.y, r.z, r.w]));
+      idx.push(i);
+    }
+    if (idx.length === 0) return;
+    active.current = true;
+    throwTime.current = 0;
+    setSettling(true);
+    const recordings = predictThrows(rapier, throws);
+    for (let k = 0; k < idx.length; k++) {
+      const i = idx[k];
+      recs.current[i] = recordings[k];
+      const handle = handles.current[i];
+      if (handle) {
+        relabelForFinal(handle, recordings[k].finalQuat, ds[i].value); // то же значение ядра
+        handle.pipMaterial.opacity = 1;
+        handle.root?.scale.setScalar(1);
+      }
+      const rt = runtimes.current[i];
+      rt.phase = 'replay';
+      rt.frame = 0;
+      rt.acc = 0;
+      rt.placement = 'free';
+    }
+  }, [nudgeNonce, setSettling, rapier]);
 
   useFrame((_, delta) => {
     const ds = diceRef.current;

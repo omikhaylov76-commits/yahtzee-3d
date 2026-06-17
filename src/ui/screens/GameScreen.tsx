@@ -29,6 +29,7 @@ export function GameScreen() {
   const events = useGameStore((s) => s.events);
   const settling = useGameStore((s) => s.settling);
   const roll = useGameStore((s) => s.roll);
+  const nudge = useGameStore((s) => s.nudge);
 
   const [denied, setDenied] = useState<{ msg: string; key: number } | null>(null);
   const nonce = useRef(0);
@@ -49,6 +50,8 @@ export function GameScreen() {
   const canRoll = state.phase === 'playing' && state.rollsLeft > 0 && !settling;
   const canHold =
     state.phase === 'playing' && state.rolledThisTurn && state.rollsLeft > 0 && !settling;
+  // Nudge доступен, когда есть что трясти: кости брошены и лежат (не в полёте).
+  const canNudge = state.phase === 'playing' && state.rolledThisTurn && !settling;
 
   return (
     <Screen className="game">
@@ -67,6 +70,15 @@ export function GameScreen() {
           <div className="controls">
             <Button variant="primary" className="roll-btn" onClick={roll} disabled={!canRoll}>
               {settling ? 'Rolling…' : state.rolledThisTurn ? 'Roll again' : 'Roll dice'}
+            </Button>
+            <Button
+              variant="ghost"
+              className="nudge-btn"
+              onClick={nudge}
+              disabled={!canNudge}
+              title="Shake the table — dice hop and settle (values unchanged)"
+            >
+              Nudge
             </Button>
             <p className="controls__hint">
               {settling
