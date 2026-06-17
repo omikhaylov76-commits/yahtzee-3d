@@ -46,11 +46,13 @@ export function predictThrows(rapier: RapierNS, throws: DieThrow[]): DieRecordin
         .setRestitution(PHYS.restitution),
       fixed,
     );
+  const midZ = (ARENA.backZ + ARENA.frontZ) / 2;
+  const depthHalf = (ARENA.frontZ - ARENA.backZ) / 2;
   addBox(20, ARENA.floorHalfY, 20, 0, -ARENA.floorHalfY, 0);
-  addBox(0.5, ARENA.wallHalfH, ARENA.halfZ, -ARENA.halfX, ARENA.wallHalfH, 0);
-  addBox(0.5, ARENA.wallHalfH, ARENA.halfZ, ARENA.halfX, ARENA.wallHalfH, 0);
-  addBox(ARENA.halfX, ARENA.wallHalfH, 0.5, 0, ARENA.wallHalfH, -ARENA.halfZ);
-  addBox(ARENA.halfX, ARENA.wallHalfH, 0.5, 0, ARENA.wallHalfH, ARENA.halfZ);
+  addBox(0.5, ARENA.wallHalfH, depthHalf, -ARENA.halfX, ARENA.wallHalfH, midZ);
+  addBox(0.5, ARENA.wallHalfH, depthHalf, ARENA.halfX, ARENA.wallHalfH, midZ);
+  addBox(ARENA.halfX, ARENA.wallHalfH, 0.5, 0, ARENA.wallHalfH, ARENA.backZ);
+  addBox(ARENA.halfX, ARENA.wallHalfH, 0.5, 0, ARENA.wallHalfH, ARENA.frontZ);
 
   // Кости.
   const bodies = throws.map((t) => {

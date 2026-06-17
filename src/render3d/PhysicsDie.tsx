@@ -10,8 +10,6 @@ interface PhysicsDieProps {
   position: [number, number, number];
   /** Значение из ядра — задаёт начальную грань вверх (дальше ориентацией правит DiceField). */
   value: DieValue;
-  /** Зафиксирована ли кость (F4.4) — визуальный отклик (свечение + увеличение). */
-  held?: boolean;
   /** Клик/тап по кости (фиксация). Если не задан — кость некликабельна. */
   onSelect?: () => void;
   /** Ref на визуал кости (группа точек + материал) — для режима «проявление». */
@@ -24,7 +22,7 @@ interface PhysicsDieProps {
  * (когда `onSelect` задан). Коллайдер задаём явно по ребру — выпуклые пипсы его не «раздувают».
  */
 export const PhysicsDie = forwardRef<RapierRigidBody, PhysicsDieProps>(function PhysicsDie(
-  { position, value, held = false, onSelect, dieRef },
+  { position, value, onSelect, dieRef },
   ref,
 ) {
   return (
@@ -49,7 +47,7 @@ export const PhysicsDie = forwardRef<RapierRigidBody, PhysicsDieProps>(function 
           document.body.style.cursor = 'auto';
         }}
       >
-        <Die3D ref={dieRef} held={held} />
+        <Die3D ref={dieRef} />
       </group>
       <CuboidCollider args={[DIE_HALF, DIE_HALF, DIE_HALF]} />
     </RigidBody>

@@ -20,6 +20,14 @@ const REORIENT_TIME = 0.42; // 'reorient'
 const FADE_TIME = 0.18; // 'reveal'
 const FLIGHT_OPACITY = 0.22; // 'reveal'
 
+// Зона «отложенных» (F4.4b): отдельная нижняя полоска у переднего края (перед стенкой брос-
+// ка ARENA.frontZ), мельче брошенных, но мягко — для гармонии.
+const KEPT_Z = 3.0; // нижний/передний край экрана, с запасом — целиком в кадре
+const KEPT_GAP = 0.72;
+const KEPT_SCALE = 0.6; // компактный скромный ряд
+const MOVE_LERP = 9; // скорость переезда в рядок и обратно (доля к цели в секунду)
+const MOVE_DONE = 0.02; // порог «доехала»
+
 type Phase = 'rest' | 'thrown' | 'reorient' | 'fadein' | 'replay';
 
 interface Runtime {
@@ -29,6 +37,7 @@ interface Runtime {
   fade: number; // прогресс проявления ('reveal')
   frame: number; // текущий кадр записи ('presim')
   acc: number; // накопитель времени для шага записи ('presim')
+  placement: 'free' | 'kept'; // где кость: в зоне броска или в рядке отложенных (F4.4b)
   q0: Quaternion;
   qT: Quaternion;
   rest: Vector3;
@@ -43,8 +52,39 @@ const _a = new Vector3();
 const _up = new Vector3();
 const _axis = new Vector3();
 const _n = new Vector3();
+const _p = new Vector3();
+const _tp = new Vector3();
 const _qi = new Quaternion();
 const _R = new Quaternion();
+
+/** Слот в рядке отложенных: k-я кость из count по центру, на столе. */
+function keptSlot(order: number, count: number, out: Vector3): Vector3 {
+  const start = -((count - 1) * KEPT_GAP) / 2;
+  return out.set(start + order * KEPT_GAP, DIE_HALF, KEPT_Z);
+}
+
+/**
+ * Плавно подвинуть тело к цели (кинематика, вне физики: телепорт по lerp, скорости в ноль).
+ * Ориентацию НЕ трогаем — значение/переразметка сохраняются. Возвращает «доехала ли».
+ */
+function moveToward(body: RapierRigidBody, target: Vector3, delta: number): boolean {
+  const c = body.translation();
+  _p.set(c.x, c.y, c.z);
+  const arrived = _p.distanceTo(target) < MOVE_DONE;
+  _p.lerp(target, Math.min(1, delta * MOVE_LERP));
+  body.setTranslation({ x: _p.x, y: _p.y, z: _p.z }, true);
+  body.setLinvel(ZERO, false);
+  body.setAngvel(ZERO, false);
+  return arrived;
+}
+
+/** Плавно подвести масштаб визуала кости к цели (для скромного вида отложенных). */
+function lerpScale(handle: DieHandle | null, target: number, delta: number) {
+  const root = handle?.root;
+  if (!root) return;
+  const s = root.scale.x + (target - root.scale.x) * Math.min(1, delta * MOVE_LERP);
+  root.scale.setScalar(s);
+}
 
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 const rand = (amp: number) => (Math.random() * 2 - 1) * amp;
@@ -111,9 +151,10 @@ function targetQuat(value: DieValue, current: Quaternion): Quaternion {
 function makeThrow(p: [number, number, number]): DieThrow {
   const q = new Quaternion().setFromEuler(new Euler(rand(Math.PI), rand(Math.PI), rand(Math.PI)));
   return {
-    pos: [p[0] + rand(0.4), 2.6 + Math.random() * 0.6, p[2] + rand(0.4)],
+    pos: [p[0] + rand(0.4), 2.6 + Math.random() * 0.6, p[2] + rand(0.3)],
     rot: [q.x, q.y, q.z, q.w],
-    lin: [rand(2.5), -2 - Math.random() * 2, rand(2.5)],
+    // По глубине (z) разлёт минимальный — кости ложатся на ОДНОЙ глубине, видимый размер ровный.
+    lin: [rand(1.8), -2 - Math.random() * 2, rand(0.9)],
     ang: [rand(12), rand(12), rand(12)],
   };
 }
@@ -144,6 +185,7 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
       fade: 0,
       frame: 0,
       acc: 0,
+      placement: 'free' as 'free' | 'kept',
       q0: new Quaternion(),
       qT: new Quaternion(),
       rest: new Vector3(),
@@ -193,11 +235,13 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
         if (handle) {
           relabelForFinal(handle, recordings[k].finalQuat, ds[i].value);
           handle.pipMaterial.opacity = 1; // точки чёткие всё время
+          handle.root?.scale.setScalar(1); // брошенная — полный размер
         }
         const rt = runtimes.current[i];
         rt.phase = 'replay';
         rt.frame = 0;
         rt.acc = 0;
+        rt.placement = 'free';
       }
       return;
     }
@@ -213,6 +257,8 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
       }
       rt.phase = 'thrown';
       rt.calm = 0;
+      rt.placement = 'free';
+      handles.current[i]?.root?.scale.setScalar(1);
       if (LANDING_MODE === 'reveal' && handles.current[i]) {
         handles.current[i]!.pipMaterial.opacity = FLIGHT_OPACITY;
       }
@@ -225,9 +271,38 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
   }, [events, setSettling, rapier]);
 
   useFrame((_, delta) => {
+    const ds = diceRef.current;
+
+    // Рядок отложенных (F4.4b): held едут в ряд (slot по порядку held-индексов, ряд смыкается),
+    // снятые возвращаются в зону броска. Кинематика, всегда; ориентацию/значение не трогаем.
+    let heldCount = 0;
+    for (let i = 0; i < bodies.current.length; i++) if (ds[i]?.held) heldCount++;
+    let order = 0;
+    for (let i = 0; i < bodies.current.length; i++) {
+      const body = bodies.current[i];
+      const rt = runtimes.current[i];
+      if (!body || !rt) continue;
+      const held = !!ds[i]?.held;
+      const handle = handles.current[i];
+      if (rt.phase === 'rest') {
+        // Масштаб тянем к цели КАЖДЫЙ кадр (held → скромнее, иначе → полный 1). Самовосста-
+        // новление: вернувшаяся/свободная кость гарантированно возвращает стандартный размер.
+        lerpScale(handle, held ? KEPT_SCALE : 1, delta);
+        if (held) {
+          keptSlot(order, heldCount, _tp);
+          moveToward(body, _tp, delta);
+          rt.placement = 'kept';
+        } else if (rt.placement === 'kept') {
+          const p = posRef.current[i];
+          _tp.set(p[0], DIE_HALF, p[2]);
+          if (moveToward(body, _tp, delta)) rt.placement = 'free';
+        }
+      }
+      if (held) order++;
+    }
+
     if (!active.current) return;
     throwTime.current += delta;
-    const ds = diceRef.current;
     let allRest = true;
 
     for (let i = 0; i < bodies.current.length; i++) {
@@ -319,7 +394,6 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
           dieRef={(el) => (handles.current[i] = el)}
           position={p}
           value={dice[i].value}
-          held={dice[i].held}
           onSelect={canHold ? () => toggleHold(i) : undefined}
         />
       ))}

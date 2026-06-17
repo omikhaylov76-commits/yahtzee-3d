@@ -16,6 +16,8 @@ const PIP_COLOR = '#04201f';
  * - `pipMaterial.opacity` гасим/проявляем точки в зависимости от скорости полёта.
  */
 export interface DieHandle {
+  /** Корневая группа визуала — масштабируем для скромного вида отложенных (F4.4b). */
+  root: Group | null;
   pipGroup: Group | null;
   pipMaterial: MeshStandardMaterial;
 }
@@ -25,10 +27,8 @@ export interface DieHandle {
  * с общим прозрачным материалом — так их можно переназначать (поворот группы) и проявлять
  * (opacity) независимо от физического тела.
  */
-export const Die3D = forwardRef<DieHandle, { held?: boolean }>(function Die3D(
-  { held = false },
-  ref,
-) {
+export const Die3D = forwardRef<DieHandle>(function Die3D(_, ref) {
+  const root = useRef<Group>(null);
   const pipGroup = useRef<Group>(null);
   const pipMaterial = useMemo(
     () =>
@@ -45,6 +45,9 @@ export const Die3D = forwardRef<DieHandle, { held?: boolean }>(function Die3D(
   useImperativeHandle(
     ref,
     () => ({
+      get root() {
+        return root.current;
+      },
       get pipGroup() {
         return pipGroup.current;
       },
@@ -54,8 +57,7 @@ export const Die3D = forwardRef<DieHandle, { held?: boolean }>(function Die3D(
   );
 
   return (
-    // Held: лёгкое увеличение всего кубика (равномерно, не зависит от ориентации тела).
-    <group scale={held ? 1.06 : 1}>
+    <group ref={root}>
       <RoundedBox
         args={[DIE_SIZE, DIE_SIZE, DIE_SIZE]}
         radius={0.1}
@@ -63,14 +65,7 @@ export const Die3D = forwardRef<DieHandle, { held?: boolean }>(function Die3D(
         castShadow
         receiveShadow
       >
-        {/* Held: тёплое лиловое свечение Auros как видимый отклик фиксации. */}
-        <meshStandardMaterial
-          color={AUROS.die}
-          roughness={0.32}
-          metalness={0.16}
-          emissive={held ? '#fde9ff' : '#000000'}
-          emissiveIntensity={held ? 0.45 : 0}
-        />
+        <meshStandardMaterial color={AUROS.die} roughness={0.32} metalness={0.16} />
       </RoundedBox>
 
       <group ref={pipGroup}>
