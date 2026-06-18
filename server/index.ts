@@ -21,17 +21,13 @@ const app = Fastify({ logger: true });
 
 app.get('/health', async () => ({ status: 'ok' }));
 
-// Realtime поверх http-сервера fastify (2.0.c): рукопожатие + версия протокола.
-attachRealtime(app.server, app.log, CLIENT_ORIGIN);
+// Realtime поверх http-сервера fastify (2.0.c→2.1.b): рукопожатие + авторитетный игровой цикл.
+// Композиционный корень инъецирует игровой модуль в платформу (платформа игро-НЕзависима, ADR-0011).
+attachRealtime(app.server, app.log, CLIENT_ORIGIN, yahtzeeModule);
 
 app.listen({ port: PORT, host: HOST }).then(
   () => {
-    // Доказательство, что общий код исполняется на сервере: дескриптор игры берётся из core,
-    // версия — из shared/. (Реальный realtime/комнаты — 2.0.c/2.1.)
-    app.log.info(
-      { game: yahtzeeModule.id, categories: yahtzeeModule.categories, protocol: PROTOCOL_VERSION },
-      'platform ready',
-    );
+    app.log.info({ game: yahtzeeModule.id, protocol: PROTOCOL_VERSION }, 'platform ready');
   },
   (err) => {
     app.log.error(err);
