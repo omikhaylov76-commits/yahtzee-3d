@@ -68,6 +68,19 @@ export interface GameState {
   gameId?: string;
 }
 
+/**
+ * Публичное состояние для рассылки клиентам по сети (2.1.a, ADR-0009/0012): БЕЗ `seed`/`rng`,
+ * чтобы клиент не мог предвычислить будущие броски. Строится `toPublicState` (game.ts) явным
+ * allowlist'ом полей — новые поля состояния НЕ утекают, пока их туда не добавят осознанно.
+ */
+export type PublicGameState = Omit<GameState, 'seed' | 'rng'>;
+
+/** Обобщённый итог завершённой партии для статистики/лидерборда (2.1.a; победители — по стабильному id). */
+export interface GameResult {
+  winnerIds: string[];
+  standings: { id: string; name: string; total: number }[];
+}
+
 /** Пороговые значения правил. */
 export const UPPER_BONUS = 35;
 export const UPPER_BONUS_THRESHOLD = 63;
@@ -77,7 +90,9 @@ export const YAHTZEE_BONUS = 100;
 /** Действия — единственный вход в ядро (ADR 0003). */
 export type Action =
   | { type: 'NEW_GAME'; players: { name: string }[]; seed?: number }
-  | { type: 'ROLL' }
+  // values — инъекция значений костей извне (сервер/CSPRNG, ADR-0012): длина 5, по позиции;
+  // held-кости сохраняются. Без values — бросок считает RNG ядра (локальная игра).
+  | { type: 'ROLL'; values?: DieValue[] }
   | { type: 'TOGGLE_HOLD'; index: number }
   | { type: 'SCORE'; category: Category };
 

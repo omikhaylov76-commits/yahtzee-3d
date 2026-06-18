@@ -14,8 +14,10 @@ import {
   type Die,
   type DieValue,
   type DomainEvent,
+  type GameResult,
   type GameState,
   type Player,
+  type PublicGameState,
   type ReduceResult,
 } from './types';
 
@@ -42,11 +44,15 @@ export function availableCategories(state: GameState): Category[] {
   return CATEGORIES.filter((c) => !(c in card));
 }
 
-/** Создать новую игру. seed обычно подаёт транспорт (случайный); по умолчанию — 1. */
-export function createGame(players: { name: string }[], seed = 1): GameState {
+/**
+ * Создать новую игру. seed обычно подаёт транспорт (случайный); по умолчанию — 1.
+ * id игрока: если задан (сервер привязывает к сессии/аккаунту, 2.1) — берём его; иначе
+ * прежний позиционный фолбэк `p${i}` (локальная игра).
+ */
+export function createGame(players: { name: string; id?: string }[], seed = 1): GameState {
   return {
     players: players.map((p, i) => ({
-      id: `p${i}`,
+      id: p.id ?? `p${i}`,
       name: p.name,
       card: {},
       bonusYahtzees: 0,
@@ -78,10 +84,30 @@ function computeWinners(players: Player[]): number[] {
   return totals.map((t, i) => (t === max ? i : -1)).filter((i) => i >= 0);
 }
 
-function applyRoll(state: GameState): ReduceResult {
+function isDieValue(v: unknown): v is DieValue {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 6;
+}
+
+/**
+ * Бросок. `values` — инъекция значений извне (сервер/CSPRNG, ADR-0012): длина = числу костей,
+ * по позиции; held-кости сохраняются. Без `values` — значения считает RNG ядра (локальная игра).
+ */
+function applyRoll(state: GameState, values?: DieValue[]): ReduceResult {
   if (state.phase !== 'playing' || state.rollsLeft <= 0) {
     return denied(state, 'roll-not-allowed');
   }
+
+  if (values !== undefined) {
+    if (values.length !== state.dice.length || !values.every(isDieValue)) {
+      return denied(state, 'bad-roll-values');
+    }
+    const dice = state.dice.map((die, i) => (die.held ? die : { value: values[i], held: false }));
+    return {
+      state: { ...state, dice, rollsLeft: state.rollsLeft - 1, rolledThisTurn: true },
+      events: [{ type: 'dice:rolled' }],
+    };
+  }
+
   let rng = state.rng;
   const dice = state.dice.map((die) => {
     if (die.held) return die;
@@ -165,13 +191,50 @@ function applyScore(state: GameState, category: Category): ReduceResult {
   };
 }
 
+/* ───────── Сетевые чистые функции (2.1.a, ADR-0009/0011/0012) ───────── */
+
+/** Ход ли игрока с данным стабильным id (для авторизации действия на сервере). */
+export function isPlayersTurn(state: GameState, playerId: string): boolean {
+  return state.phase === 'playing' && state.players[state.current]?.id === playerId;
+}
+
+/** Партия завершена? */
+export function isGameOver(state: GameState): boolean {
+  return state.phase === 'over';
+}
+
+/** Обобщённый итог для статистики/лидерборда: победители и места по стабильному id. */
+export function getResult(state: GameState): GameResult {
+  const standings = state.players.map((p) => ({ id: p.id, name: p.name, total: totalScore(p) }));
+  const winnerIds = state.winnerIds.map((i) => state.players[i].id);
+  return { winnerIds, standings };
+}
+
+/**
+ * Публичное состояние для рассылки клиентам (ADR-0009/0012): явный allowlist полей БЕЗ
+ * `seed`/`rng` (иначе клиент предскажет броски). Allowlist, а не Omit-через-spread, — чтобы
+ * новое поле состояния НЕ утекло клиенту, пока его осознанно не добавят сюда.
+ */
+export function toPublicState(state: GameState): PublicGameState {
+  return {
+    players: state.players,
+    current: state.current,
+    dice: state.dice,
+    rollsLeft: state.rollsLeft,
+    rolledThisTurn: state.rolledThisTurn,
+    phase: state.phase,
+    winnerIds: state.winnerIds,
+    gameId: state.gameId,
+  };
+}
+
 /** Единственная точка изменения состояния игры. */
 export function reduce(state: GameState, action: Action): ReduceResult {
   switch (action.type) {
     case 'NEW_GAME':
       return { state: createGame(action.players, action.seed), events: [] };
     case 'ROLL':
-      return applyRoll(state);
+      return applyRoll(state, action.values);
     case 'TOGGLE_HOLD':
       return applyToggleHold(state, action.index);
     case 'SCORE':
