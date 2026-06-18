@@ -15,5 +15,5 @@
     "noFallthroughCasesInSwitch": true,
     "noEmit": true
   },
-  "include": ["server"]
+  "include": ["server", "shared"]
 }

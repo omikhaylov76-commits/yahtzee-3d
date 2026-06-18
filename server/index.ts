@@ -5,6 +5,8 @@
  * работают, отдельно от риска ESM-импорта ядра.
  */
 import Fastify from 'fastify';
+import { PROTOCOL_VERSION } from '../shared/protocol';
+import { yahtzeeModule } from './games/yahtzee';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? '0.0.0.0'; // Railway требует 0.0.0.0
@@ -13,7 +15,17 @@ const app = Fastify({ logger: true });
 
 app.get('/health', async () => ({ status: 'ok' }));
 
-app.listen({ port: PORT, host: HOST }).catch((err) => {
-  app.log.error(err);
-  process.exit(1);
-});
+app.listen({ port: PORT, host: HOST }).then(
+  () => {
+    // Доказательство, что общий код исполняется на сервере: дескриптор игры берётся из core,
+    // версия — из shared/. (Реальный realtime/комнаты — 2.0.c/2.1.)
+    app.log.info(
+      { game: yahtzeeModule.id, categories: yahtzeeModule.categories, protocol: PROTOCOL_VERSION },
+      'platform ready',
+    );
+  },
+  (err) => {
+    app.log.error(err);
+    process.exit(1);
+  },
+);
