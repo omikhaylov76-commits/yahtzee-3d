@@ -68,6 +68,28 @@ export function previewFor(state: GameState, category: Category): number | null 
   return scoreCategoryWithJoker(values, category, jokerActiveFor(player, values));
 }
 
+/**
+ * Категории активного игрока с МАКСИМАЛЬНЫМ превью (> 0) при текущих костях — для мягкого
+ * акцента «лучший вариант» (F6.5). Пусто, если бросок ещё не сделан или все превью = 0.
+ * При равенстве максимума возвращаются все такие категории. Чистое представление, не правила.
+ */
+export function bestPreviewCategories(state: GameState): Set<Category> {
+  const best = new Set<Category>();
+  if (state.phase !== 'playing' || !state.rolledThisTurn) return best;
+  const previews: Array<[Category, number]> = [];
+  let max = 0;
+  for (const c of [...UPPER, ...LOWER]) {
+    const p = previewFor(state, c);
+    if (p !== null && p > 0) {
+      previews.push([c, p]);
+      if (p > max) max = p;
+    }
+  }
+  if (max <= 0) return best;
+  for (const [c, p] of previews) if (p === max) best.add(c);
+  return best;
+}
+
 /** Записанное значение категории у игрока (или undefined). */
 export function recorded(player: Player, category: Category): number | undefined {
   return player.card[category];

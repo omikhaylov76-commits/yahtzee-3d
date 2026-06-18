@@ -8,11 +8,13 @@ interface CategoryRowProps {
   onScore: (category: Category) => void;
   /** Ячейка, которую только что записали — для пульса (F6.1). */
   flash?: CellFlash | null;
+  /** Свободные категории с максимумом очков — мягкий акцент «лучший вариант» (F6.5). */
+  best?: Set<Category>;
 }
 
 /** Строка категории: подпись + ячейка на игрока. У активного игрока свободная ячейка —
  *  кликабельное превью очков; заполненная показывает записанное; чужие/недоступные — точка. */
-export function CategoryRow({ state, category, onScore, flash }: CategoryRowProps) {
+export function CategoryRow({ state, category, onScore, flash, best }: CategoryRowProps) {
   const preview = previewFor(state, category);
   const label = CATEGORY_LABELS[category];
 
@@ -39,11 +41,17 @@ export function CategoryRow({ state, category, onScore, flash }: CategoryRowProp
           );
         }
         if (isCurrent && preview !== null) {
+          // F6.5: нули — тускло (is-zero), самый выгодный вариант — мягкий акцент (is-best).
+          const isZero = preview === 0;
+          const isBest = !isZero && best?.has(category) === true;
+          const previewCls = `${cls} scell--preview${isZero ? ' is-zero' : ''}${
+            isBest ? ' is-best' : ''
+          }`;
           return (
             <button
               key={i}
               type="button"
-              className={`${cls} scell--preview`}
+              className={previewCls}
               role="cell"
               aria-label={`Score ${label}: ${preview}`}
               onClick={() => onScore(category)}

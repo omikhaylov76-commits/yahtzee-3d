@@ -2,7 +2,13 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Category } from '../../core';
 import { useGameStore } from '../../state/gameStore';
 import { CategoryRow } from './CategoryRow';
-import { LOWER, UPPER, UPPER_BONUS_THRESHOLD, totalsFor } from '../scoreView';
+import {
+  LOWER,
+  UPPER,
+  UPPER_BONUS_THRESHOLD,
+  bestPreviewCategories,
+  totalsFor,
+} from '../scoreView';
 
 /** Какую ячейку «подсветить» при записи очков (F6.1) — событийно из ядра. */
 export interface CellFlash {
@@ -51,6 +57,8 @@ export function ScoreTable() {
   if (!state) return null;
 
   const style = { '--cols': state.players.length } as CSSProperties;
+  // F6.5: какие свободные категории дают максимум очков с текущих костей (мягкий акцент).
+  const best = bestPreviewCategories(state);
 
   return (
     <section className="board score-table" style={style} aria-label="Score sheet">
@@ -79,7 +87,7 @@ export function ScoreTable() {
         </div>
       </div>
       {UPPER.map((c) => (
-        <CategoryRow key={c} state={state} category={c} onScore={score} flash={flash} />
+        <CategoryRow key={c} state={state} category={c} onScore={score} flash={flash} best={best} />
       ))}
 
       {/* Верхний бонус: прогресс до порога или начисленные +35 */}
@@ -107,7 +115,7 @@ export function ScoreTable() {
         </div>
       </div>
       {LOWER.map((c) => (
-        <CategoryRow key={c} state={state} category={c} onScore={score} flash={flash} />
+        <CategoryRow key={c} state={state} category={c} onScore={score} flash={flash} best={best} />
       ))}
 
       {/* Бонусные Yahtzee */}

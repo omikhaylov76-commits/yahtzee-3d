@@ -689,22 +689,42 @@ body {
   padding-top: var(--s-4);
 }
 
-/* Кликабельное превью очков */
+/* Кликабельное превью очков (F6.5: приглушённое число + деликатный фон доступного). */
 .scell--preview {
-  color: var(--ice);
-  background: rgba(0, 130, 124, 0.18);
+  color: var(--text);
+  background: rgba(0, 130, 124, 0.12);
+  border-color: rgba(237, 255, 254, 0.1);
   cursor: pointer;
   transition:
     background 0.12s ease,
     border-color 0.12s ease,
+    color 0.12s ease,
     transform 0.1s ease;
 }
 .scell--preview:hover {
+  color: var(--ice);
   background: rgba(203, 255, 252, 0.22);
   border-color: rgba(237, 255, 254, 0.5);
 }
 .scell--preview:active {
   transform: scale(0.96);
+}
+/* F6.5: лучший вариант — мягкий акцент (число ярче + тонкая cyan-обводка), не кричит. */
+.scell--preview.is-best {
+  color: var(--ice);
+  background: rgba(0, 179, 166, 0.16);
+  border-color: rgba(0, 179, 166, 0.55);
+}
+/* F6.5: «нули» — тускло и плоско, но кликабельно (осознанно записать 0). */
+.scell--preview.is-zero {
+  color: var(--text-dim);
+  background: transparent;
+  border-color: transparent;
+}
+.scell--preview.is-zero:hover {
+  color: var(--text);
+  background: rgba(237, 255, 254, 0.06);
+  border-color: rgba(237, 255, 254, 0.18);
 }
 
 /* Бонус / итог */
