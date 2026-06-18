@@ -69,6 +69,8 @@
   --ice: #edfffe;
   --lilac: #fde9ff;
   --grad-primary: linear-gradient(90deg, #00827c 0%, #cbfffc 100%);
+  /* Aurora — перламутровый акцент Auros, дозированно (F7.3): ровно одна фирменная кромка. */
+  --grad-aurora: linear-gradient(90deg, #cbfffc 0%, #edfffe 26%, #fffdfa 48%, #fad1ff 89%);
   --teal-dot: #00b3a6;
   --danger: #ff9a8a;
   --hairline: rgba(187, 199, 198, 0.14);
@@ -667,9 +669,23 @@ body {
 }
 /* ───────── Таблица счёта (F3.4) ───────── */
 .score-table {
+  position: relative;
   padding: var(--s-5) var(--s-5) var(--s-6);
   display: flex;
   flex-direction: column;
+}
+/* F7.3: единственная Aurora-кромка — тонкая перламутровая линия по верху карточки
+   (вписана между скруглёнными углами, чтобы не торчать за радиус). «Премиальный край». */
+.score-table::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--r-card);
+  right: var(--r-card);
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: var(--grad-aurora);
+  opacity: 0.85;
 }
 .srow {
   display: grid;
