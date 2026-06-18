@@ -11,7 +11,11 @@ import { attachRealtime } from './platform/realtime';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? '0.0.0.0'; // Railway требует 0.0.0.0
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'; // CORS dev-origin
+// CORS-origin(ы) клиента: список через запятую (dev + прод-клиент). На Railway — через env.
+const CLIENT_ORIGIN = (process.env.CLIENT_ORIGIN ?? 'http://localhost:5173')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const app = Fastify({ logger: true });
 

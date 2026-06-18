@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "test": "vitest run",
+    "start": "node dist-server/index.js",
     "dev:server": "tsx watch server/index.ts",
     "dev:all": "concurrently -n web,api -c cyan,magenta \"vite\" \"tsx watch server/index.ts\"",
     "build:server": "tsup",

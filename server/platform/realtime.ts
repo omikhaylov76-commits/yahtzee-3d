@@ -10,7 +10,7 @@ import { PROTOCOL_VERSION } from '../../shared/protocol';
 export function attachRealtime(
   httpServer: HttpServer,
   log: FastifyBaseLogger,
-  clientOrigin: string,
+  clientOrigin: string | string[],
 ): Server {
   const io = new Server(httpServer, { cors: { origin: clientOrigin } });
   let connections = 0;
