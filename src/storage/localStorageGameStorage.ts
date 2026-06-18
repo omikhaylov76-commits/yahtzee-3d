@@ -23,11 +23,20 @@ function defaultStorage(): Storage | null {
   }
 }
 
-/** Минимальная проверка формы загруженного состояния (защита от мусора/чужих данных). */
+/**
+ * Проверка формы загруженного состояния (защита от мусора/чужих/протухших данных). Проверяем
+ * не только типы, но и инварианты, на которые опирается UI: непустой список игроков, индекс
+ * текущего в диапазоне, ровно 5 костей, валидная фаза. Иначе экран игры падал бы при рендере
+ * (`players[current].name`) — а верхнего ErrorBoundary нет. Битые данные -> начинаем заново.
+ */
 function looksLikeGameState(value: unknown): value is GameState {
   if (!value || typeof value !== 'object') return false;
   const g = value as Record<string, unknown>;
-  return Array.isArray(g.players) && Array.isArray(g.dice) && typeof g.phase === 'string';
+  if (!Array.isArray(g.players) || g.players.length < 1) return false;
+  if (!Array.isArray(g.dice) || g.dice.length !== 5) return false;
+  if (g.phase !== 'playing' && g.phase !== 'over') return false;
+  if (typeof g.current !== 'number' || g.current < 0 || g.current >= g.players.length) return false;
+  return true;
 }
 
 export class LocalStorageGameStorage implements GameStorage {

@@ -20,4 +20,6 @@ export interface SoundEngine {
   setVolume(volume: number): void; // 0..1
   startAmbient(): void;
   stopAmbient(): void;
+  /** Разблокировать звук по первому жесту пользователя (политика автоплея браузеров). */
+  unlock(): void;
 }
