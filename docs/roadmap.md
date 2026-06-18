@@ -95,14 +95,13 @@ realtime + `NetworkTransport`), потом комнаты с кодами, по�
   - [x] 2.L.b **Локальный соло-рекорд** (обещание spec): лучший личный итог соло в `SoloRecordStorage`
         между сессиями (отдельный ключ, без аккаунта/сети); строка рекорда на экране итогов. (c08088f)
         Развод localStorage: жёсткое правило «`NetworkTransport` не трогает `GameStorage`» — в 2.1.c.
-- [ ] **2.0 Каркас сервера + технические решения** (новый бэкенд). Под-шаги:
-  - [ ] 2.0.a **Решить и зафиксировать сборку сервера** (ADR-0014/architecture): раннер dev (`tsx`) +
-        prod-эмит (`tsup`/esbuild), отдельный `tsconfig.server.json`, ESM-стратегия (расширения/бандлер),
-        `engines.node` + `.nvmrc`, dev — два процесса. Пустой `fastify`-сервер + health-check.
-  - [ ] 2.0.b `core/` доступно клиенту и серверу; Socket.IO-подключение с **версией протокола в
-        рукопожатии**; границы платформа/игра (ADR-0011): `server/platform`, `server/games/yahtzee`,
-        `src/platform`. Счётчик комнат/соединений в логах. Критерий: «hello world» по сети end-to-end.
-        🖐 **Railway:** создать проект, первый деплой, переменная с адресом сервера; dev↔prod (CORS-origin).
+- [x] **2.0 Каркас сервера + технические решения** (done; разбит на a–d, progress/done/2.0-server-skeleton.md).
+      **Прод:** сервер на Railway — https://yahtzee-3d-production.up.railway.app (проект `yahtzee-3d`).
+      «hello world» по сети end-to-end проверен в проде (health 200; socket.io рукопожатие v1/v99).
+  - [x] 2.0.a Серверная сборка (tsx/tsup, `tsconfig.server.json`, `engines`/`.nvmrc`) + fastify `/health`. (bddfe83)
+  - [x] 2.0.b Общий `core` на сервере (ESM ок dev+prod) + `shared/protocol.ts` + каркас платформа/игра (ADR-0011). (b3c61a0)
+  - [x] 2.0.c Socket.IO + версия протокола в рукопожатии + счётчик соединений; клиент-проба статуса. (e9bf94f)
+  - [x] 2.0.d `railway.json`/`.env.example`/CORS-список + деплой на Railway (railway up); прод-проверка. (5b6757c)
 - [ ] **2.1 Игра по сети** — игроки с РАЗНЫХ устройств в одной комнате в реальном времени.
       Сервер АВТОРИТЕТНЫЙ. **ЯДРО ДОПОЛНЯЕМ** (ADR-0009/0011/0012). Под-шаги:
   - [ ] 2.1.a Дополнить `core` (чистые функции + тесты): внешние id игроков (вместо `p0..p3`),
