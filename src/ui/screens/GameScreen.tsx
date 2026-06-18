@@ -7,6 +7,7 @@ import { RollCounter } from '../components/RollCounter';
 import { ScoreTable } from '../components/ScoreTable';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { hasWebGL } from '../capabilities';
+import { totalsFor } from '../scoreView';
 import { useGameStore } from '../../state/gameStore';
 
 // F6.4: 3D-арена (Three.js + Rapier WASM, ~3 МБ) грузится ЛЕНИВО отдельным чанком — только
@@ -78,8 +79,16 @@ export function GameScreen() {
         <section className="arena">
           <header className="turn">
             <Eyebrow>In play</Eyebrow>
-            <h2 className="heading turn__name">{current.name}</h2>
-            <RollCounter rollsLeft={state.rollsLeft} />
+            <h2 className="display turn__name">{current.name}</h2>
+            {/* F7.1: «терминальная» строка-статистика — живой счёт игрока + счётчик бросков. */}
+            <div className="turn__meta">
+              <span className="turn__total">
+                <span className="turn__total-num data">{totalsFor(current).total}</span>
+                <span className="turn__total-label">pts</span>
+              </span>
+              <span className="turn__sep" aria-hidden="true" />
+              <RollCounter rollsLeft={state.rollsLeft} />
+            </div>
           </header>
 
           {use3D ? (
