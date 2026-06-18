@@ -4,6 +4,7 @@ import { useRapier, type RapierRigidBody } from '@react-three/rapier';
 import { Euler, Quaternion, Vector3 } from 'three';
 import type { Die, DieValue } from '../core';
 import { useGameStore } from '../state/gameStore';
+import { prefersReducedMotion } from '../ui/capabilities';
 import { DIE_HALF, PHYS } from './constants';
 import { VALUE_NORMAL, VALUE_ROTATION } from './dieGeometry';
 import { LANDING_MODE } from './landing';
@@ -231,6 +232,9 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
   useEffect(() => {
     const ds = diceRef.current;
     const ps = posRef.current;
+    // F6.3: при reduced-motion 3D остаётся, но кости укладываются МГНОВЕННО — без тумбла
+    // (бросок → сразу финальный кадр записи; сбор хода → сразу конечная поза). Значения те же.
+    const reduced = prefersReducedMotion();
 
     // Смена хода (после записи ядро сбрасывает кости): ПЛАВНО собираем кости в ровный ряд и
     // доворачиваем на значения ядра (свежие «1»). Без этого тело↔разметка рассинхронятся и у
@@ -249,7 +253,7 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
         const r = body.rotation();
         rt.q0.set(r.x, r.y, r.z, r.w); // тело: от текущей позы к identity
         rt.pip0.copy(handle?.pipGroup?.quaternion ?? IDENTITY_Q); // точки: от текущей разметки к identity
-        rt.t = 0;
+        rt.t = reduced ? 1 : 0; // reduced-motion: первый кадр сразу доводит сбор до конца
         rt.phase = 'gather';
         rt.placement = 'free';
         if (handle) handle.pipMaterial.opacity = 1;
@@ -290,7 +294,8 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
         }
         const rt = runtimes.current[i];
         rt.phase = 'replay';
-        rt.frame = 0;
+        // reduced-motion: сразу последний кадр (поза покоя), без проигрывания тумбла.
+        rt.frame = reduced ? recordings[k].frames.length - 1 : 0;
         rt.acc = 0;
         rt.placement = 'free';
       }
@@ -327,6 +332,7 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
   useEffect(() => {
     if (nudgeNonce === 0) return; // стартовое значение, не трясём
     const ds = diceRef.current;
+    const reduced = prefersReducedMotion(); // reduced-motion: без хопа, кость сразу в покое
     const idx: number[] = [];
     const throws: DieThrow[] = [];
     for (let i = 0; i < bodies.current.length; i++) {
@@ -355,7 +361,7 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
       }
       const rt = runtimes.current[i];
       rt.phase = 'replay';
-      rt.frame = 0;
+      rt.frame = reduced ? recordings[k].frames.length - 1 : 0; // reduced-motion: сразу поза покоя
       rt.acc = 0;
       rt.placement = 'free';
     }
