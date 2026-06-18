@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import type { DomainEvent, GameState } from '../core';
 import { MemoryGameStorage } from '../storage/memoryGameStorage';
 import { LocalTransport } from './LocalTransport';
-import { NetworkTransport } from './NetworkTransport';
 
 const players = [{ name: 'A' }, { name: 'B' }];
 
@@ -83,12 +82,4 @@ describe('LocalTransport', () => {
   });
 });
 
-describe('NetworkTransport (заглушка)', () => {
-  it('все методы кидают «не реализовано»', () => {
-    const t = new NetworkTransport();
-    expect(() => t.getState()).toThrow(/не реализован/);
-    expect(() => t.dispatch()).toThrow(/не реализован/);
-    expect(() => t.subscribe()).toThrow(/не реализован/);
-    expect(() => t.reset()).toThrow(/не реализован/);
-  });
-});
+// NetworkTransport реализован в 2.1.c — его поведение покрыто в NetworkTransport.test.ts.
