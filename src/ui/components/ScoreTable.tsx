@@ -90,20 +90,40 @@ export function ScoreTable() {
         <CategoryRow key={c} state={state} category={c} onScore={score} flash={flash} best={best} />
       ))}
 
-      {/* Верхний бонус: прогресс до порога или начисленные +35 */}
+      {/* Верхний бонус: начисленные +35 или читаемый прогресс до порога (F7.2). */}
       <div className="srow srow--bonus" role="row">
         <div className="srow__label" role="rowheader">
           Bonus (at {UPPER_BONUS_THRESHOLD})
         </div>
         {state.players.map((p, i) => {
           const t = totalsFor(p);
+          const earned = t.bonus > 0;
+          const pct = Math.min(100, Math.round((t.upper / UPPER_BONUS_THRESHOLD) * 100));
           return (
             <div
               key={i}
-              className={`scell data${i === state.current ? ' is-current' : ''}`}
+              className={`scell data scell--bonus${i === state.current ? ' is-current' : ''}${
+                earned ? ' is-earned' : ''
+              }`}
               role="cell"
+              aria-label={
+                earned
+                  ? `Bonus earned +${t.bonus}`
+                  : `Upper ${t.upper} of ${UPPER_BONUS_THRESHOLD} toward bonus`
+              }
             >
-              {t.bonus > 0 ? `+${t.bonus}` : `${t.upper}/${UPPER_BONUS_THRESHOLD}`}
+              {earned ? (
+                `+${t.bonus}`
+              ) : (
+                <span className="bonus-meter">
+                  <span className="bonus-meter__num">
+                    {t.upper}/{UPPER_BONUS_THRESHOLD}
+                  </span>
+                  <span className="bonus-meter__track" aria-hidden="true">
+                    <span className="bonus-meter__fill" style={{ width: `${pct}%` }} />
+                  </span>
+                </span>
+              )}
             </div>
           );
         })}
