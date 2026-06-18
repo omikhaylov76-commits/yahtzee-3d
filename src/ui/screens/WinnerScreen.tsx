@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { Screen } from '../components/Screen';
 import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
 import { useGameStore } from '../../state/gameStore';
 import { useUiStore } from '../../state/uiStore';
+import { soloRecordStorage, type SoloRecordResult } from '../../storage/soloRecordStorage';
 import { totalsFor } from '../scoreView';
 
 /** Экран итогов: финальная таблица мест, подсветка победителя, рестарт. */
@@ -11,16 +13,26 @@ export function WinnerScreen() {
   const newGame = useGameStore((s) => s.newGame);
   const reset = useGameStore((s) => s.reset);
   const setView = useUiStore((s) => s.setView);
+  // Хуки — ДО раннего return (правила хуков). Значения считаем с защитой от null-состояния.
+  const [rec, setRec] = useState<SoloRecordResult | null>(null);
+
+  const solo = !!state && state.players.length === 1;
+  // Места по убыванию итога (исходный индекс сохраняем для подсветки победителя).
+  const ranked = state
+    ? state.players
+        .map((p, i) => ({ player: p, index: i, total: totalsFor(p).total }))
+        .sort((a, b) => b.total - a.total)
+    : [];
+  // Соло (2.L.b): учитываем персональный локальный рекорд один раз на маунте экрана итогов.
+  // record() идемпотентен — перезагрузка на этом экране рекорд не накручивает.
+  const soloTotal = solo ? ranked[0].total : 0;
+  useEffect(() => {
+    if (solo) setRec(soloRecordStorage.record(soloTotal));
+  }, [solo, soloTotal]);
+
   if (!state) return null;
 
-  const solo = state.players.length === 1;
   const winners = new Set(state.winnerIds);
-
-  // Места по убыванию итога (исходный индекс сохраняем для подсветки победителя).
-  const ranked = state.players
-    .map((p, i) => ({ player: p, index: i, total: totalsFor(p).total }))
-    .sort((a, b) => b.total - a.total);
-
   let title: string;
   if (solo) title = 'Final score';
   else if (state.winnerIds.length > 1) title = "It's a tie";
@@ -52,6 +64,12 @@ export function WinnerScreen() {
             </li>
           ))}
         </ol>
+
+        {solo && rec && (
+          <p className={`solo-record${rec.isRecord ? ' is-new' : ''}`}>
+            {rec.isRecord ? '★ New personal record' : `Personal best: ${rec.best}`}
+          </p>
+        )}
 
         <div className="winner__actions">
           <Button variant="primary" onClick={playAgain}>

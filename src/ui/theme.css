@@ -1086,6 +1086,21 @@ body {
   color: var(--heading);
 }
 
+/* Строка персонального соло-рекорда (2.L.b). Сдержанно; «новый рекорд» — сиреневый дозированно. */
+.solo-record {
+  margin: 0;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.solo-record.is-new {
+  color: var(--lilac);
+  font-weight: 600;
+  text-shadow: 0 0 14px rgba(253, 233, 255, 0.45);
+}
+
 .winner__actions {
   display: flex;
   gap: var(--s-3);
