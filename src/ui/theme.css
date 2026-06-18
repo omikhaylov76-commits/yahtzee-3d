@@ -428,6 +428,163 @@ body {
   font-size: 16px;
 }
 
+/* ───────── Меню режима (2.L.a) ───────── */
+.menu__inner {
+  margin: auto;
+  width: min(460px, 100%);
+  padding: var(--s-12) var(--s-6) var(--s-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-10);
+}
+.menu__head {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+/* Луминесцентный ореол за заголовком — глубина «обсерватории» (как на старте). */
+.menu__head::before {
+  content: '';
+  position: absolute;
+  left: -10%;
+  top: -30%;
+  width: 70%;
+  height: 160%;
+  background: radial-gradient(closest-side, rgba(0, 130, 124, 0.4), rgba(0, 130, 124, 0) 100%);
+  filter: blur(8px);
+  pointer-events: none;
+  z-index: -1;
+}
+.menu__title {
+  margin: 0;
+  font-size: clamp(48px, 12vw, 80px);
+  text-shadow: 0 0 28px rgba(203, 255, 252, 0.18);
+}
+.menu__sub {
+  margin: 0;
+  color: var(--text);
+}
+.menu__modes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+/* Тактильная объёмная кнопка режима (лекало F8: блик сверху + жёсткая нижняя кромка +
+   продавливание при нажатии). reduced-motion гасит transform общим правилом ниже. */
+.mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: var(--s-5) var(--s-6);
+  text-align: left;
+  font-family: var(--font-display);
+  color: var(--heading);
+  background:
+    linear-gradient(180deg, rgba(237, 255, 254, 0.05), rgba(237, 255, 254, 0) 60%), var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(237, 255, 254, 0.14),
+    0 3px 0 rgba(0, 0, 0, 0.32),
+    0 18px 40px -28px rgba(0, 0, 0, 0.8);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    border-color 0.12s ease,
+    filter 0.12s ease;
+}
+.mode-btn:hover {
+  border-color: rgba(237, 255, 254, 0.4);
+}
+.mode-btn:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgba(237, 255, 254, 0.1),
+    0 1px 0 rgba(0, 0, 0, 0.3);
+}
+.mode-btn__title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.mode-btn__desc {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+/* Главное действие — фирменный teal->cyan градиент (как btn-primary), тёмный текст. */
+.mode-btn--primary {
+  border: 0;
+  color: #012624;
+  background: var(--grad-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 3px 0 rgba(0, 70, 66, 0.55),
+    0 20px 44px -26px rgba(0, 130, 124, 0.8);
+}
+.mode-btn--primary:hover {
+  filter: brightness(1.06);
+}
+.mode-btn--primary .mode-btn__desc {
+  color: rgba(1, 38, 36, 0.72);
+}
+.mode-btn--primary:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 1px 0 rgba(0, 70, 66, 0.5);
+}
+
+/* Кнопка «назад в меню» (setup/онлайн → меню) */
+.back-link {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 4px 2px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+.back-link:hover {
+  color: var(--ice);
+}
+
+/* Заглушка онлайна (coming soon) */
+.coming__inner {
+  margin: auto;
+  width: min(460px, 100%);
+  padding: var(--s-12) var(--s-6) var(--s-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-8);
+  align-items: center;
+  text-align: center;
+}
+.coming__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  align-items: center;
+}
+.coming__title {
+  margin: 0;
+  font-size: clamp(40px, 9vw, 64px);
+  text-shadow: 0 0 28px rgba(203, 255, 252, 0.16);
+}
+.coming__sub {
+  margin: 0;
+  max-width: 38ch;
+  color: var(--text);
+}
+
 /* ───────── Игровой экран (F3.3) ───────── */
 .game {
   padding: var(--s-6);

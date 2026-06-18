@@ -3,6 +3,7 @@ import { Screen } from '../components/Screen';
 import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
 import { useGameStore } from '../../state/gameStore';
+import { useUiStore } from '../../state/uiStore';
 
 const MAX_PLAYERS = 4;
 const MIN_PLAYERS = 1;
@@ -12,6 +13,7 @@ const COUNTS = [1, 2, 3, 4];
 /** Экран старта: число игроков (1–4), имена, запуск партии. */
 export function StartScreen() {
   const newGame = useGameStore((s) => s.newGame);
+  const setView = useUiStore((s) => s.setView);
   const [count, setCount] = useState(2);
   const [names, setNames] = useState<string[]>(['', '', '', '']);
 
@@ -35,6 +37,10 @@ export function StartScreen() {
           start();
         }}
       >
+        <button type="button" className="back-link" onClick={() => setView('menu')}>
+          ← Back to menu
+        </button>
+
         <header className="start__head">
           <Eyebrow>Local · hotseat</Eyebrow>
           <h1 className="display start__title">Yahtzee 3D</h1>

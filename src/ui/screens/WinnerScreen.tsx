@@ -2,6 +2,7 @@ import { Screen } from '../components/Screen';
 import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
 import { useGameStore } from '../../state/gameStore';
+import { useUiStore } from '../../state/uiStore';
 import { totalsFor } from '../scoreView';
 
 /** Экран итогов: финальная таблица мест, подсветка победителя, рестарт. */
@@ -9,6 +10,7 @@ export function WinnerScreen() {
   const state = useGameStore((s) => s.state);
   const newGame = useGameStore((s) => s.newGame);
   const reset = useGameStore((s) => s.reset);
+  const setView = useUiStore((s) => s.setView);
   if (!state) return null;
 
   const solo = state.players.length === 1;
@@ -25,6 +27,11 @@ export function WinnerScreen() {
   else title = `${state.players[state.winnerIds[0]].name} wins`;
 
   const playAgain = () => newGame(state.players.map((p) => ({ name: p.name })));
+  // «Main menu»: очистить партию (reset) и вернуться в меню выбора режима (2.L.a, ADR-0014).
+  const toMenu = () => {
+    reset();
+    setView('menu');
+  };
 
   return (
     <Screen className="winner">
@@ -50,8 +57,8 @@ export function WinnerScreen() {
           <Button variant="primary" onClick={playAgain}>
             Play again
           </Button>
-          <Button variant="ghost" onClick={reset}>
-            New game
+          <Button variant="ghost" onClick={toMenu}>
+            Main menu
           </Button>
         </div>
       </div>
