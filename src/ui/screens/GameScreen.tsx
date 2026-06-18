@@ -1,13 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { Screen } from '../components/Screen';
 import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
 import { Dice } from '../components/Dice';
 import { RollCounter } from '../components/RollCounter';
 import { ScoreTable } from '../components/ScoreTable';
-import { DiceCanvas } from '../../render3d/DiceCanvas';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { hasWebGL } from '../capabilities';
 import { useGameStore } from '../../state/gameStore';
+
+// F6.4: 3D-арена (Three.js + Rapier WASM, ~3 МБ) грузится ЛЕНИВО отдельным чанком — только
+// когда есть WebGL и экран игры реально показан. 2D-fallback и стартовый экран её не тянут.
+const DiceCanvas = lazy(() =>
+  import('../../render3d/DiceCanvas').then((m) => ({ default: m.DiceCanvas })),
+);
 
 /** Понятное сообщение для отклонённого действия (из доменных событий ядра). */
 function deniedMessage(reason: string): string {
@@ -61,6 +67,11 @@ export function GameScreen() {
   // Nudge доступен, когда есть что трясти: кости брошены и лежат (не в полёте).
   const canNudge = state.phase === 'playing' && state.rolledThisTurn && !settling;
 
+  // 2D-кости: и как путь без WebGL, и как запасной вариант при сбое загрузки 3D-чанка (F6.4).
+  const dice2D = (
+    <Dice dice={state.dice} canHold={canHold} blank={!state.rolledThisTurn} onToggle={toggleHold} />
+  );
+
   return (
     <Screen className="game">
       <div className="game__layout">
@@ -73,9 +84,14 @@ export function GameScreen() {
 
           {use3D ? (
             <>
-              <div className="dice-arena">
-                <DiceCanvas dice={state.dice} canHold={canHold} />
-              </div>
+              {/* Если ленивый 3D-чанк не загрузится — деградируем в 2D, а не в белый экран (F6.4). */}
+              <ErrorBoundary fallback={dice2D}>
+                <div className="dice-arena">
+                  <Suspense fallback={<div className="dice-arena__loading" aria-hidden="true" />}>
+                    <DiceCanvas dice={state.dice} canHold={canHold} />
+                  </Suspense>
+                </div>
+              </ErrorBoundary>
               {/* Скринридерам: значения 3D-костей (canvas им «непрозрачен») */}
               <p className="sr-only" role="status" aria-live="polite">
                 {state.rolledThisTurn
@@ -86,12 +102,7 @@ export function GameScreen() {
               </p>
             </>
           ) : (
-            <Dice
-              dice={state.dice}
-              canHold={canHold}
-              blank={!state.rolledThisTurn}
-              onToggle={toggleHold}
-            />
+            dice2D
           )}
 
           <div className="controls">
