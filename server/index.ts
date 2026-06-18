@@ -7,13 +7,18 @@
 import Fastify from 'fastify';
 import { PROTOCOL_VERSION } from '../shared/protocol';
 import { yahtzeeModule } from './games/yahtzee';
+import { attachRealtime } from './platform/realtime';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? '0.0.0.0'; // Railway требует 0.0.0.0
+const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'; // CORS dev-origin
 
 const app = Fastify({ logger: true });
 
 app.get('/health', async () => ({ status: 'ok' }));
+
+// Realtime поверх http-сервера fastify (2.0.c): рукопожатие + версия протокола.
+attachRealtime(app.server, app.log, CLIENT_ORIGIN);
 
 app.listen({ port: PORT, host: HOST }).then(
   () => {

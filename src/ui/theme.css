@@ -584,6 +584,39 @@ body {
   max-width: 38ch;
   color: var(--text);
 }
+/* Строка статуса соединения с платформой (2.0.c). Точка-pip как индикатор. */
+.conn-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.conn-status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.conn-status--connected {
+  color: var(--ice);
+}
+.conn-status--connected::before {
+  background: var(--teal-dot);
+  box-shadow: 0 0 8px 1px rgba(0, 179, 166, 0.8);
+}
+.conn-status--mismatch,
+.conn-status--offline {
+  color: var(--danger);
+}
+.conn-status--mismatch::before,
+.conn-status--offline::before {
+  background: var(--danger);
+}
 
 /* ───────── Игровой экран (F3.3) ───────── */
 .game {
