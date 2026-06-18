@@ -10,7 +10,7 @@
 /* Контрол звука (F5): компактный, в правом верхнем углу. */
 .sound-control {
   position: fixed;
-  top: 14px;
+  bottom: 14px;
   right: 16px;
   z-index: 20;
   display: flex;
@@ -613,10 +613,75 @@ body {
   align-items: center;
   gap: var(--s-3);
 }
+/* F8: Roll + Nudge в один ряд (пара), главная/вторичная. */
+.controls__row {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
 .roll-btn {
   min-width: 180px;
   padding: 16px 28px;
   font-size: 16px;
+}
+.nudge-btn {
+  padding: 16px 18px;
+}
+/* F8: тактильная глубина обеих кнопок (сдержанно) + продавливание при нажатии. */
+.roll-btn,
+.nudge-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 2px 0 rgba(0, 0, 0, 0.32),
+    0 9px 18px -9px rgba(0, 0, 0, 0.6);
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease,
+    filter 0.12s ease,
+    border-color 0.12s ease;
+}
+.roll-btn:active:not(:disabled),
+.nudge-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 1px 3px -2px rgba(0, 0, 0, 0.6);
+}
+.btn__icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.btn__icon--wide {
+  width: 18px;
+}
+/* F8: Nudge «вздрагивает» при клике — короткая отдача, синхронно со встряской стола. */
+.nudge-btn.is-shaking {
+  animation: nudge-shake 0.4s ease;
+}
+@keyframes nudge-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-2px) rotate(-1deg);
+  }
+  40% {
+    transform: translateX(2px) rotate(1deg);
+  }
+  60% {
+    transform: translateX(-1.5px);
+  }
+  80% {
+    transform: translateX(1.5px);
+  }
 }
 .controls__hint {
   margin: 0;
@@ -667,7 +732,8 @@ body {
 }
 /* ───────── Таблица счёта (F3.4) ───────── */
 .score-table {
-  padding: var(--s-5) var(--s-5) var(--s-6);
+  /* F8: компактнее, чтобы вся таблица помещалась без вертикального скролла. */
+  padding: var(--s-4) var(--s-5) var(--s-5);
   display: flex;
   flex-direction: column;
 }
@@ -681,11 +747,35 @@ body {
 .srow:last-child {
   border-bottom: 0;
 }
+/* F8 (прототип): подписи категорий — дисплейный шрифт (характернее, читаемее), + слот глифа. */
 .srow__label {
-  font-family: var(--font-body);
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  line-height: 1.1; /* F8: плотный перенос — длинные названия в 2 строки не раздувают строку. */
   color: var(--text);
-  padding: 9px 8px 9px 0;
+  padding: 6px 8px 6px 0;
+}
+/* F8: мини-грань кубика у верхних категорий (пип-мотив). Пустой слот — для выравнивания. */
+.cat-glyph {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.cat-glyph circle,
+.cat-glyph__bar {
+  fill: var(--text);
+}
+.cat-glyph--accent circle {
+  fill: var(--lilac);
+}
+.cat-glyph__die {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1;
 }
 /* Все ячейки — одинаковая коробка (высота + прозрачная рамка), чтобы строки НЕ «дышали»
    при смене активного игрока, когда превью-кнопка переезжает в другую колонку. */
@@ -693,9 +783,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
+  min-height: 42px; /* F8: единая высота строк (вмещает и 2-строчные названия ровно). */
   margin: 0;
-  padding: 6px 4px;
+  padding: 5px 4px;
   border: 1px solid transparent;
   border-radius: var(--r-control);
   box-sizing: border-box;
@@ -723,19 +813,23 @@ body {
   gap: 6px;
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 15px; /* F8: имена игроков крупнее. */
+  line-height: 1.1;
   color: var(--text);
-  padding-top: 4px;
+  padding-top: 8px;
   padding-bottom: 10px;
   overflow: hidden;
 }
 .scell--name.is-current {
   color: var(--ice);
 }
+/* F8: длинные имена переносятся на 2 строки (не обрезаются в одну), дальше — ellipsis. */
 .scell__name-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
 }
 .scell__turn {
   flex: none;
@@ -752,7 +846,7 @@ body {
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--text-dim);
-  padding-top: var(--s-4);
+  padding-top: var(--s-3);
 }
 /* F7.2: фирменная teal-точка у заголовков секций (мотив pip, как в eyebrow). */
 .srow--section .srow__label::before {

@@ -6,6 +6,7 @@ import { Dice } from '../components/Dice';
 import { RollCounter } from '../components/RollCounter';
 import { ScoreTable } from '../components/ScoreTable';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { RollDieIcon, ShakeDieIcon } from '../components/ControlIcons';
 import { hasWebGL } from '../capabilities';
 import { totalsFor } from '../scoreView';
 import { useGameStore } from '../../state/gameStore';
@@ -47,6 +48,7 @@ export function GameScreen() {
   const use3D = useMemo(() => hasWebGL(), []);
 
   const [denied, setDenied] = useState<{ msg: string; key: number } | null>(null);
+  const [nudgeShaking, setNudgeShaking] = useState(false);
   const nonce = useRef(0);
   useEffect(() => {
     const last = [...events].reverse().find((e) => e.type === 'action:denied');
@@ -72,6 +74,12 @@ export function GameScreen() {
   const dice2D = (
     <Dice dice={state.dice} canHold={canHold} blank={!state.rolledThisTurn} onToggle={toggleHold} />
   );
+
+  // F8: Nudge трясёт стол И «вздрагивает» сам (синхронно). Класс снимаем по концу анимации.
+  const onNudge = () => {
+    nudge();
+    setNudgeShaking(true);
+  };
 
   return (
     <Screen className="game">
@@ -115,20 +123,25 @@ export function GameScreen() {
           )}
 
           <div className="controls">
-            <Button variant="primary" className="roll-btn" onClick={roll} disabled={!canRoll}>
-              {settling ? 'Rolling…' : state.rolledThisTurn ? 'Roll again' : 'Roll dice'}
-            </Button>
-            {use3D && (
-              <Button
-                variant="ghost"
-                className="nudge-btn"
-                onClick={nudge}
-                disabled={!canNudge}
-                title="Shake the table — dice hop and settle (values unchanged)"
-              >
-                Nudge
+            <div className="controls__row">
+              <Button variant="primary" className="roll-btn" onClick={roll} disabled={!canRoll}>
+                <RollDieIcon />
+                {settling ? 'Rolling…' : state.rolledThisTurn ? 'Roll again' : 'Roll dice'}
               </Button>
-            )}
+              {use3D && (
+                <Button
+                  variant="default"
+                  className={`nudge-btn${nudgeShaking ? ' is-shaking' : ''}`}
+                  onClick={onNudge}
+                  onAnimationEnd={() => setNudgeShaking(false)}
+                  disabled={!canNudge}
+                  title="Shake the table — dice hop and re-settle (same values)"
+                >
+                  <ShakeDieIcon />
+                  Nudge
+                </Button>
+              )}
+            </div>
             <p className="controls__hint">
               {settling
                 ? 'Dice are rolling…'

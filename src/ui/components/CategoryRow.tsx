@@ -1,5 +1,6 @@
 import type { Category, GameState } from '../../core';
 import type { CellFlash } from './ScoreTable';
+import { CategoryGlyph } from './CategoryGlyph';
 import { CATEGORY_LABELS, previewFor, recorded } from '../scoreView';
 
 interface CategoryRowProps {
@@ -21,7 +22,8 @@ export function CategoryRow({ state, category, onScore, flash, best }: CategoryR
   return (
     <div className="srow" role="row">
       <div className="srow__label" role="rowheader">
-        {label}
+        <CategoryGlyph category={category} />
+        <span className="srow__label-text">{label}</span>
       </div>
       {state.players.map((player, i) => {
         const isCurrent = i === state.current;
