@@ -3,6 +3,7 @@ node_modules/
 __pycache__/
 .venv/
 dist/
+dist-server/
 build/
 *.log
 .DS_Store
