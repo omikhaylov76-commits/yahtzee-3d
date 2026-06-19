@@ -7,6 +7,7 @@ import { useGameStore } from '../state/gameStore';
 import { DIE_HALF, PHYS } from './constants';
 import { VALUE_NORMAL, VALUE_ROTATION } from './dieGeometry';
 import { LANDING_MODE } from './landing';
+import { valuesDiffer } from './diceDiff';
 import { predictThrows, type DieRecording, type DieThrow } from './predictor';
 import { PhysicsDie } from './PhysicsDie';
 import type { DieHandle } from './Die3D';
@@ -228,9 +229,19 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
   const posRef = useRef(positions);
   posRef.current = positions;
 
+  // 2.1.e-1: значения костей, которые поле РЕАЛЬНО отыграло (к ним доворочены грани). Приземление
+  // запускаем по их РАСХОЖДЕНИЮ с актуальными state.dice — а не только по транзиентному событию
+  // dice:rolled. Так грани авторитетны к серверу и в онлайне (свой и чужой бросок), независимо от
+  // тайминга доставки события / ленивой загрузки 3D. Значения для доворота и так берём из state.dice.
+  const playedValues = useRef<DieValue[]>(dice.map((d) => d.value));
+  // Сигнатура значений — зависимость эффекта: он перезапускается при ИЗМЕНЕНИИ значений (а не на
+  // каждый рендер, как было бы с самим массивом dice).
+  const valuesSig = dice.map((d) => d.value).join(',');
+
   useEffect(() => {
     const ds = diceRef.current;
     const ps = posRef.current;
+    const values = ds.map((d) => d.value);
 
     // Смена хода (после записи ядро сбрасывает кости): ПЛАВНО собираем кости в ровный ряд и
     // доворачиваем на значения ядра (свежие «1»). Без этого тело↔разметка рассинхронятся и у
@@ -254,11 +265,21 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
         rt.placement = 'free';
         if (handle) handle.pipMaterial.opacity = 1;
       }
+      // Грани после gather ведут к свежим значениям (обычно «1») — фиксируем их как отыгранные,
+      // чтобы diff не запустил поверх сбора лишний «бросок».
+      playedValues.current = values;
       return;
     }
 
-    // Бросок: реагируем только на новое событие dice:rolled.
-    if (!events.some((e) => e.type === 'dice:rolled')) return;
+    // Бросок: пришло событие dice:rolled ИЛИ значения разошлись с отыгранными (онлайн / пропущенное
+    // или скоалесцированное событие). Второй путь делает приземление авторитетным ПО ЗНАЧЕНИЯМ
+    // (грани = state.dice), даже если событие потерялось; перекат кости в то же значение докрывает
+    // событийный путь (косметика — её грань и так верна).
+    const rolled =
+      events.some((e) => e.type === 'dice:rolled') || valuesDiffer(playedValues.current, values);
+    if (!rolled) return;
+    // Фиксируем значения как отыгранные ДО раскрутки — повторный рендер с той же сигнатурой не запустит снова.
+    playedValues.current = values;
     throwTime.current = 0;
     active.current = true;
     setSettling(true);
@@ -319,7 +340,7 @@ export function DiceField({ dice, positions, canHold }: DiceFieldProps) {
       body.setLinvel({ x: t.lin[0], y: t.lin[1], z: t.lin[2] }, true);
       body.setAngvel({ x: t.ang[0], y: t.ang[1], z: t.ang[2] }, true);
     }
-  }, [events, setSettling, rapier]);
+  }, [events, valuesSig, setSettling, rapier]);
 
   // Nudge: косметический «подскок» лежащих костей в зоне броска на ТЕ ЖЕ значения ядра.
   // Предрасчёт от текущих поз → переразметка под значения → воспроизведение (как бросок,
