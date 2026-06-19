@@ -1,23 +1,69 @@
 /**
- * Чистая модель рассадки по местам комнаты (2.1.e-2) — БЕЗ Socket.IO, поэтому тестируема
+ * Чистая модель рассадки по местам комнаты (2.1.e-2 → 2.2.a-1) — БЕЗ Socket.IO, поэтому тестируема
  * (см. seating.test.ts). Сетевая обвязка (создание сокета, join/disconnect, рассылка) — в
  * realtime.ts; авторитетная игровая логика партии — в rooms.ts. Тот же шов «чистое ↔ сокеты»,
  * что у rooms.ts/realtime.ts.
  */
+import type { LobbyPayload } from '../../shared/protocol';
 import type { RoomState } from './rooms';
+
+/** До 4 игроков в комнате (2.2); партию запускает хозяин кнопкой Start при ≥ MIN_TO_START. */
+export const ROOM_CAPACITY = 4;
+export const MIN_TO_START = 2;
 
 /** Одно место в комнате: к кому привязан живой сокет (null — место держим за ушедшим игроком). */
 export interface Seat {
   socketId: string | null;
   playerId: string;
   name: string;
+  /** Хозяин ли это место (создатель комнаты). Хозяин запускает партию (2.2). */
+  isHost: boolean;
 }
 
-/** Комната платформы: места + (опционально) идущая партия. `game===null` до старта. */
+/** Комната платформы: код (=id) + места + (опционально) идущая партия. `game===null` до старта. */
 export interface Room {
+  /** Код комнаты (Crockford base32) — он же ключ реестра комнат. */
   id: string;
   seats: Seat[];
   game: RoomState | null;
+  /** Метка создания (мс) — для TTL/сборки мусора заброшенных комнат (ADR-0009, защита памяти). */
+  createdAt: number;
+  /**
+   * Когда ИДУЩАЯ партия осталась без живых сокетов (мс), иначе null. Даёт grace-период на реконнект
+   * (ADR-0010): sweeper сносит брошенную партию только спустя паузу, а не мгновенно при общем блипе
+   * сети у всех игроков. Сбрасывается в null, как только кто-то вернулся (reclaim).
+   */
+  emptiedAt: number | null;
+}
+
+/** Можно ли уже стартовать: партия ещё не идёт и набрался минимум игроков. */
+export function canStart(room: Room): boolean {
+  return room.game === null && room.seats.length >= MIN_TO_START;
+}
+
+/** Снимок состава лобби (до старта) для рассылки клиентам: список игроков, вместимость, готовность. */
+export function lobbySnapshot(room: Room): LobbyPayload {
+  return {
+    roomId: room.id,
+    players: room.seats.map((s, i) => ({ seat: i, name: s.name, isHost: s.isHost })),
+    capacity: ROOM_CAPACITY,
+    canStart: canStart(room),
+  };
+}
+
+/**
+ * Гарантировать наличие ЖИВОГО хозяина (минимальное наследование, 2.2.a-1; полное — 2.2.c). Если
+ * живой хозяин уже есть — ничего. Иначе снимаем роль со всех и отдаём первому живому месту. Зовётся
+ * после выхода игрока из лобби, чтобы было кому нажать Start. Возвращает нового хозяина (или undefined,
+ * если живых мест не осталось).
+ */
+export function ensureHost(room: Room): Seat | undefined {
+  const liveHost = room.seats.find((s) => s.isHost && s.socketId !== null);
+  if (liveHost) return liveHost;
+  for (const s of room.seats) s.isHost = false;
+  const next = room.seats.find((s) => s.socketId !== null);
+  if (next) next.isHost = true;
+  return next;
 }
 
 /**

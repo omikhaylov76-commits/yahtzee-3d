@@ -7,20 +7,29 @@
  *
  * v2 (2.1.b): добавлены реальные игровые сообщения (вход в комнату, действия, рассылка
  * состояния с версией). v1 был «hello world» (только рукопожатие) — с v2 он несовместим.
+ *
+ * v3 (2.2.a-1): комнаты по КОДУ вместо единственной `dev`. Добавлены `room:create` (создать
+ * комнату, получить код), `room:start` (хозяин запускает партию при ≥2 — авто-старт убран),
+ * рассылка состава лобби `room:lobby`, отказ `room:already-started`; в посадку добавлен `isHost`.
+ * `roomId` теперь несёт КОД комнаты (в 2.1 это был литерал `dev`).
  */
 import type { Category, DomainEvent, PublicGameState } from '../src/core';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Имена сокет-сообщений (одна точка истины для клиента и сервера). */
 export const MSG = {
   // клиент -> сервер
+  create: 'room:create',
   join: 'room:join',
+  start: 'room:start',
   action: 'action',
   // сервер -> клиент
   joined: 'room:joined',
+  lobby: 'room:lobby',
   full: 'room:full',
   notFound: 'room:not-found',
+  alreadyStarted: 'room:already-started',
   state: 'state',
   denied: 'denied',
 } as const;
@@ -42,7 +51,12 @@ export interface ActionMessage {
   actionId: string;
 }
 
-/** Запрос на вход в комнату. В 2.1 `roomId` — общий литерал (коды/лобби — 2.2). */
+/** Запрос на создание комнаты (2.2.a-1): сервер генерирует код и сажает автора хозяином. */
+export interface CreateRequest {
+  name?: string;
+}
+
+/** Запрос на вход в комнату по коду (2.2.a-1). `roomId` несёт КОД (сервер его нормализует). */
 export interface JoinRequest {
   roomId: string;
   name?: string;
@@ -54,11 +68,32 @@ export interface JoinRequest {
   playerId?: string;
 }
 
-/** Подтверждение посадки: стабильный `playerId` места (для авторизации действий) и индекс места. */
+/** Подтверждение посадки: стабильный `playerId` места (для авторизации действий), индекс и роль. */
 export interface JoinedPayload {
   roomId: string;
   playerId: string;
   seat: number;
+  /** Хозяин ли это место (создатель комнаты). Хозяин запускает партию кнопкой Start (2.2). */
+  isHost: boolean;
+}
+
+/** Один игрок в составе лобби (до старта партии): место, имя, роль. */
+export interface LobbyPlayer {
+  seat: number;
+  name: string;
+  isHost: boolean;
+}
+
+/**
+ * Состав комнаты ДО старта (2.2.a-1) — рассылается всем в комнате при каждом изменении состава.
+ * Клиент рисует лобби (список, кто хозяин) и кнопку Start (активна у хозяина при `canStart`).
+ */
+export interface LobbyPayload {
+  roomId: string;
+  players: LobbyPlayer[];
+  capacity: number;
+  /** Можно ли уже стартовать (игроков ≥ минимума). Кнопку Start гейтит хозяин по этому флагу. */
+  canStart: boolean;
 }
 
 /**
