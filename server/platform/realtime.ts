@@ -22,6 +22,7 @@ import {
   type JoinRequest,
   type JoinedPayload,
   type KickRequest,
+  type PresencePayload,
   type StatePayload,
 } from '../../shared/protocol';
 import { normalizeName } from '../../shared/names';
@@ -71,6 +72,18 @@ export function attachRealtime(
   /** Разослать всем в комнате актуальный состав лобби (до старта партии). */
   function broadcastLobby(room: Room): void {
     io.to(room.id).emit(MSG.lobby, lobbySnapshot(room));
+  }
+
+  /**
+   * Разослать присутствие в ИДУЩЕЙ партии (2.2.d-2): кто сейчас на живом сокете. По этому списку клиент
+   * понимает, что остался один (соперник вышел), и показывает баннер. В лобби не зовём — там состав идёт
+   * через `room:lobby`. БЕЗ forfeit: партию не трогаем (авто-победа/таймеры — 2.4.c).
+   */
+  function broadcastPresence(room: Room): void {
+    if (!room.game) return;
+    io.to(room.id).emit(MSG.presence, {
+      connected: room.seats.filter((s) => s.socketId !== null).map((s) => s.playerId),
+    } satisfies PresencePayload);
   }
 
   /**
@@ -221,6 +234,7 @@ export function attachRealtime(
         };
         socket.emit(MSG.joined, joined);
         socket.emit(MSG.state, snapshot(room, [])); // партия идёт (гейт выше) — несём state.dice (e-1)
+        broadcastPresence(room); // вернулся — оставшиеся снимут баннер «соперник вышел» (2.2.d-2)
         log.info({ roomId: code, playerId: reclaim.playerId }, 'player reclaimed seat');
         return;
       }
@@ -350,6 +364,7 @@ export function attachRealtime(
         // Если живых не осталось — НЕ сносим сразу: даём grace на реконнект (ADR-0010), реальный снос
         // делает sweeper по истечении GAME_GRACE_MS. Так общий блип сети не теряет активную партию.
         if (room.seats.every((s) => s.socketId === null)) room.emptiedAt = Date.now();
+        broadcastPresence(room); // оставшимся: кто ещё на связи — оставшийся один увидит баннер (2.2.d-2)
       }
       log.info({ roomId: room.id, playerId: ctx.playerId }, 'player left');
     });

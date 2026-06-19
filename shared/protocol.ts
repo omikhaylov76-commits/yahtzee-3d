@@ -32,6 +32,7 @@ export const MSG = {
   notFound: 'room:not-found',
   alreadyStarted: 'room:already-started',
   kicked: 'room:kicked', // тебя выгнал хозяин (2.2.c-1) — unicast жертве
+  presence: 'room:presence', // кто на живом сокете в идущей партии (2.2.d-2): оставшийся один → баннер
   state: 'state',
   denied: 'denied',
 } as const;
@@ -112,6 +113,15 @@ export interface StatePayload {
   stateVersion: number;
   state: PublicGameState;
   events: DomainEvent[];
+}
+
+/**
+ * Присутствие в ИДУЩЕЙ партии (2.2.d-2): список `playerId` с живым сокетом. Рассылается в комнату при
+ * изменении состава соединений во время партии (disconnect/reclaim). Клиент: если в `connected` нет
+ * НИКОГО, кроме своего id → остался один (соперник вышел) → баннер. БЕЗ forfeit (авто-победа/таймеры — 2.4.c).
+ */
+export interface PresencePayload {
+  connected: string[];
 }
 
 /** Отказ в действии — unicast автору (не в общий поток комнаты). */

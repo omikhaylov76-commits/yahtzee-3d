@@ -14,6 +14,7 @@ import {
   PROTOCOL_VERSION,
   type JoinedPayload,
   type LobbyPayload,
+  type PresencePayload,
 } from '../../shared/protocol';
 import { NetworkTransport, type OnlineIntent } from '../transport/NetworkTransport';
 import type { Transport } from '../transport/Transport';
@@ -50,6 +51,8 @@ export interface OnlineCallbacks {
   onStatus: (status: OnlineStatus) => void;
   onLobby: (lobby: LobbyPayload) => void;
   onJoined: (joined: JoinedPayload) => void;
+  /** Присутствие в идущей партии (2.2.d-2): playerId с живым сокетом. Оставшийся один → баннер «opponent left». */
+  onPresence: (connected: string[]) => void;
 }
 
 export interface OnlineSession {
@@ -106,6 +109,10 @@ export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): 
   socket.on(MSG.kicked, () => closeWith('kicked')); // хозяин выгнал — терминально (2.2.c-1)
   socket.on(MSG.state, () => {
     if (!terminal) cb.onStatus('playing'); // пришло авторитетное состояние — партия пошла
+  });
+  socket.on(MSG.presence, (p) => {
+    // Присутствие идущей партии (2.2.d-2): кто ещё на связи. Оставшийся один → баннер (логика — в сторе).
+    if (!terminal) cb.onPresence((p as PresencePayload)?.connected ?? []);
   });
 
   /** Терминальный отказ входа: фиксируем статус и закрываем сокет (войти не сможем — нет смысла держать). */

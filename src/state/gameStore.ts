@@ -76,6 +76,11 @@ export interface GameStoreState {
   isHost: boolean;
   /** Код текущей онлайн-комнаты (для шаринга в лобби); null вне онлайна. */
   roomCode: string | null;
+  /**
+   * Присутствие в идущей сетевой партии (2.2.d-2): playerId с живым сокетом (из `room:presence`). null вне
+   * онлайна/до первого presence. Если в списке нет НИКОГО, кроме `myPlayerId` → соперник вышел (баннер).
+   */
+  connectedIds: string[] | null;
   /** Войти в онлайн по намерению (создать комнату / войти по коду): подменить транспорт сетевым. */
   goOnline: (intent: OnlineIntent) => void;
   /** Хозяин запускает партию из лобби (сервер проверяет роль и ≥2 игроков). */
@@ -208,6 +213,7 @@ export function createGameStore(
     mySeat: null,
     isHost: false,
     roomCode: null,
+    connectedIds: null,
     goOnline: (intent) => {
       if (get().mode === 'online') return; // уже онлайн — повторный заход игнорируем
       session = makeOnlineSession(intent, {
@@ -218,6 +224,7 @@ export function createGameStore(
             onlineStatus === 'kicked' ? { onlineStatus, lobby: null } : { onlineStatus },
           ),
         onLobby: (lobby) => store.setState({ lobby }),
+        onPresence: (connected) => store.setState({ connectedIds: connected }), // 2.2.d-2: «остался один»
         onJoined: (j) =>
           store.setState({
             myPlayerId: j.playerId,
@@ -234,6 +241,7 @@ export function createGameStore(
         mySeat: null,
         isHost: false,
         roomCode: null,
+        connectedIds: null,
       });
     },
     startGameOnline: () => {
@@ -259,6 +267,7 @@ export function createGameStore(
         mySeat: null,
         isHost: false,
         roomCode: null,
+        connectedIds: null,
       });
     },
   }));
@@ -333,6 +342,16 @@ export function selectTurnBanner(s: GameStoreState): string | null {
   // Пока сервер не сообщил наше место (`myPlayerId == null`), не утверждаем «ход соперника» — это
   // могло бы соврать в короткое окно реконнекта (2.1.e). Ввод всё равно заблокирован (fail-safe).
   if (s.myPlayerId == null || !s.state) return null;
+  // Остался один (2.2.d-2): сервер прислал присутствие идущей партии, и в нём нет НИКОГО, кроме меня —
+  // соперник вышел. Партия не завершена штатно (over → WinnerScreen). Приоритет ниже «Connection lost»
+  // (там упало МОЁ соединение), выше «Opponent's turn». Без forfeit (авто-победа/таймеры — 2.4.c).
+  if (
+    s.state.phase !== 'over' &&
+    s.connectedIds != null &&
+    !s.connectedIds.some((id) => id !== s.myPlayerId)
+  ) {
+    return 'Your opponent left the game.';
+  }
   return isMyTurn(s) ? null : "Opponent's turn";
 }
 

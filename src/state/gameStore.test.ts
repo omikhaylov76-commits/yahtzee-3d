@@ -322,6 +322,50 @@ describe('gameStore — сетевой гейтинг ввода (2.1.d-3)', () 
     expect(selectTurnBanner(store.getState())).toBe('Connection lost — reconnecting…');
   });
 
+  it('остался один (2.2.d-2): presence без соперника → баннер «opponent left», приоритет над «чужой ход»', () => {
+    const ctx = enterOnline('A', 'B'); // ход соперника B
+    expect(selectTurnBanner(ctx.store.getState())).toBe("Opponent's turn"); // presence ещё не пришёл
+    ctx.cb()?.onPresence(['A']); // сервер: на связи только я → соперник вышел
+    expect(ctx.store.getState().connectedIds).toEqual(['A']);
+    expect(selectTurnBanner(ctx.store.getState())).toBe('Your opponent left the game.');
+    expect(selectInputLocked(ctx.store.getState())).toBe(true); // его ход — ввод всё равно закрыт
+  });
+
+  it('соперник на связи (2.2.d-2): presence с обоими → баннера «opponent left» нет', () => {
+    const ctx = enterOnline('A', 'B');
+    ctx.cb()?.onPresence(['A', 'B']);
+    expect(selectTurnBanner(ctx.store.getState())).toBe("Opponent's turn"); // оба на связи — обычный «чужой ход»
+  });
+
+  it('соперник вернулся (2.2.d-2): новый presence с обоими снимает баннер «opponent left»', () => {
+    const ctx = enterOnline('A', 'B');
+    ctx.cb()?.onPresence(['A']); // ушёл
+    expect(selectTurnBanner(ctx.store.getState())).toBe('Your opponent left the game.');
+    ctx.cb()?.onPresence(['A', 'B']); // reclaim — вернулся
+    expect(selectTurnBanner(ctx.store.getState())).toBe("Opponent's turn");
+  });
+
+  it('приоритет (2.2.d-2): при потере МОЕГО соединения «Connection lost» важнее «opponent left»', () => {
+    const ctx = enterOnline('A', 'B');
+    ctx.cb()?.onPresence(['A']);
+    ctx.status()?.('connecting'); // упало моё соединение
+    expect(selectTurnBanner(ctx.store.getState())).toBe('Connection lost — reconnecting…');
+  });
+
+  it('goLocal чистит connectedIds (2.2.d-2)', () => {
+    const ctx = enterOnline('A', 'B');
+    ctx.cb()?.onPresence(['A']);
+    expect(ctx.store.getState().connectedIds).toEqual(['A']);
+    ctx.store.getState().goLocal();
+    expect(ctx.store.getState().connectedIds).toBeNull();
+  });
+
+  it('пустой presence (2.2.d-2): никого живого в списке → баннер «opponent left» (краевой)', () => {
+    const ctx = enterOnline('A', 'B');
+    ctx.cb()?.onPresence([]); // никого на связи — «нет НИКОГО кроме меня» верно и для пустого списка
+    expect(selectTurnBanner(ctx.store.getState())).toBe('Your opponent left the game.');
+  });
+
   it('local-режим: ввод никогда не заблокирован, баннера нет (без регрессий Вехи 1)', () => {
     const { store } = freshStore();
     store.getState().newGame(players);
