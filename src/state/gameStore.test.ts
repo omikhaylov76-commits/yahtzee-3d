@@ -119,14 +119,32 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
     const net = new FakeNetTransport();
     const dispose = vi.fn();
     const start = vi.fn();
+    const kick = vi.fn();
     let cb: OnlineCallbacks | null = null;
     const make = (_intent: OnlineIntent, callbacks: OnlineCallbacks): OnlineSession => {
       cb = callbacks;
-      return { transport: net, dispose, start };
+      return { transport: net, dispose, start, kick };
     };
     const store = createGameStore(local, make);
-    return { store, net, dispose, start, status: () => cb?.onStatus ?? null, cb: () => cb };
+    return { store, net, dispose, start, kick, status: () => cb?.onStatus ?? null, cb: () => cb };
   }
+
+  it('kickPlayer проксирует индекс места в сессию (полномочие хозяина, 2.2.c-1)', () => {
+    const { store, kick } = onlineStore();
+    store.getState().goOnline({ type: 'create' });
+    store.getState().kickPlayer(2);
+    expect(kick).toHaveBeenCalledWith(2);
+  });
+
+  it('статус kicked гасит lobby — роутер уводит из лобби на экран входа (2.2.c-1)', () => {
+    const { store, cb } = onlineStore();
+    store.getState().goOnline({ type: 'create' });
+    cb()?.onLobby({ roomId: 'ABC234', players: [], capacity: 4, canStart: false });
+    expect(store.getState().lobby).not.toBeNull();
+    cb()?.onStatus('kicked');
+    expect(store.getState().onlineStatus).toBe('kicked');
+    expect(store.getState().lobby).toBeNull(); // увели из лобби
+  });
 
   it('goOnline переключает режим и зеркалит сетевое состояние, а не локальное', () => {
     const { store, net } = onlineStore();
@@ -240,7 +258,7 @@ describe('gameStore — сетевой гейтинг ввода (2.1.d-3)', () 
     let cb: OnlineCallbacks | null = null;
     const make = (_intent: OnlineIntent, callbacks: OnlineCallbacks): OnlineSession => {
       cb = callbacks;
-      return { transport: net, dispose: vi.fn(), start: vi.fn() };
+      return { transport: net, dispose: vi.fn(), start: vi.fn(), kick: vi.fn() };
     };
     const store = createGameStore(local, make);
     return { store, net, status: () => cb?.onStatus ?? null, cb: () => cb };

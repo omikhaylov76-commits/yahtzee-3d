@@ -80,6 +80,8 @@ export interface GameStoreState {
   goOnline: (intent: OnlineIntent) => void;
   /** Хозяин запускает партию из лобби (сервер проверяет роль и ≥2 игроков). */
   startGameOnline: () => void;
+  /** Хозяин выгоняет игрока из лобби по индексу места (2.2.c-1); сервер проверяет роль. */
+  kickPlayer: (seat: number) => void;
   /** Выйти из онлайна: отключить сетевой транспорт, вернуться на сохранённый локальный. */
   goLocal: () => void;
 }
@@ -209,7 +211,12 @@ export function createGameStore(
     goOnline: (intent) => {
       if (get().mode === 'online') return; // уже онлайн — повторный заход игнорируем
       session = makeOnlineSession(intent, {
-        onStatus: (onlineStatus) => store.setState({ onlineStatus }),
+        onStatus: (onlineStatus) =>
+          // 'kicked' терминален и приходит, пока мы в лобби: гасим `lobby`, чтобы роутер увёл из
+          // LobbyScreen на OnlineScreen со статусом (там покажется «хозяин удалил вас»). (2.2.c-1)
+          store.setState(
+            onlineStatus === 'kicked' ? { onlineStatus, lobby: null } : { onlineStatus },
+          ),
         onLobby: (lobby) => store.setState({ lobby }),
         onJoined: (j) =>
           store.setState({
@@ -231,6 +238,9 @@ export function createGameStore(
     },
     startGameOnline: () => {
       session?.start();
+    },
+    kickPlayer: (seat) => {
+      session?.kick(seat);
     },
     goLocal: () => {
       if (get().mode === 'local') return;

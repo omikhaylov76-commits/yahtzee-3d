@@ -21,6 +21,7 @@ import {
   type DeniedPayload,
   type JoinRequest,
   type JoinedPayload,
+  type KickRequest,
   type StatePayload,
 } from '../../shared/protocol';
 import { normalizeName } from '../../shared/names';
@@ -70,6 +71,26 @@ export function attachRealtime(
   /** Разослать всем в комнате актуальный состав лобби (до старта партии). */
   function broadcastLobby(room: Room): void {
     io.to(room.id).emit(MSG.lobby, lobbySnapshot(room));
+  }
+
+  /**
+   * Переиндексация мест после УДАЛЕНИЯ из лобби (кик/выход): каждому ЖИВОМУ месту шлём его АКТУАЛЬНЫЙ
+   * `joined` (новый seat + роль; свой `playerId` — не утечка), затем общий состав. Без этого у сдвинутых
+   * игроков `mySeat` устаревает: пропадает «you»-бейдж, а промотированный хозяин не видит Start (баг 2.2.a).
+   * При ДОБАВЛЕНии (join/create) resync не нужен — там `push` в конец, индексы прежних стабильны.
+   */
+  function resyncSeats(room: Room): void {
+    room.seats.forEach((s, seat) => {
+      if (s.socketId) {
+        io.to(s.socketId).emit(MSG.joined, {
+          roomId: room.id,
+          playerId: s.playerId,
+          seat,
+          isHost: s.isHost,
+        } satisfies JoinedPayload);
+      }
+    });
+    broadcastLobby(room);
   }
 
   // Сборка мусора комнат. Лобби (game===null) без живых или давно не стартовавшее — сносим сразу.
@@ -246,6 +267,30 @@ export function attachRealtime(
       io.to(room.id).emit(MSG.state, snapshot(room, []));
     });
 
+    socket.on(MSG.kick, (req: KickRequest) => {
+      const ctx = sockets.get(socket.id);
+      if (!ctx) return;
+      const room = rooms.get(ctx.roomId);
+      if (!room || room.game) return; // кик только в ЛОББИ; во время партии — forfeit (2.4.c)
+      const me = room.seats.find((s) => s.playerId === ctx.playerId);
+      if (!me?.isHost) return; // выгнать может только хозяин
+      const seat = req?.seat;
+      if (typeof seat !== 'number' || seat < 0 || seat >= room.seats.length) return;
+      const victim = room.seats[seat];
+      if (victim.playerId === ctx.playerId) return; // себя не кикаем (для выхода — Leave/disconnect)
+
+      room.seats.splice(seat, 1); // убрать место жертвы (индексы оставшихся сдвинутся → resync ниже)
+      if (victim.socketId) {
+        const vs = io.sockets.sockets.get(victim.socketId);
+        vs?.emit(MSG.kicked, { roomId: room.id }); // уведомить жертву (её клиент уйдёт на экран входа)
+        vs?.leave(room.id); // вывести её сокет из рассылки комнаты
+        sockets.delete(victim.socketId); // забыть привязку (поздний disconnect жертвы не тронет комнату)
+      }
+      ensureHost(room); // страховка живого хозяина (жертва не хозяин, но единообразно)
+      resyncSeats(room); // оставшимся — актуальные seat + состав
+      log.info({ roomId: room.id, seat, playerId: victim.playerId }, 'player kicked by host');
+    });
+
     socket.on(MSG.action, (msg: ActionMessage) => {
       const ctx = sockets.get(socket.id);
       if (!ctx) return; // действие без посадки — игнор
@@ -295,7 +340,7 @@ export function attachRealtime(
           rooms.delete(room.id); // пустое лобби убираем сразу
         } else {
           ensureHost(room);
-          broadcastLobby(room);
+          resyncSeats(room); // индексы сдвинулись после filter — освежить seat у оставшихся (баг 2.2.a)
         }
       } else {
         // Партия идёт: место держим за игроком (reclaim — 2.1.e-2). Обнуляем ТОЛЬКО если место всё

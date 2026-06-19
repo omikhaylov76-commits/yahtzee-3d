@@ -16,11 +16,27 @@ export function LobbyScreen() {
   const mySeat = useGameStore((s) => s.mySeat);
   const roomCode = useGameStore((s) => s.roomCode);
   const startGameOnline = useGameStore((s) => s.startGameOnline);
+  const kickPlayer = useGameStore((s) => s.kickPlayer);
   const goLocal = useGameStore((s) => s.goLocal);
   const setView = useUiStore((s) => s.setView);
   const [copied, setCopied] = useState(false);
+  const [confirmKick, setConfirmKick] = useState<number | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout>>();
-  useEffect(() => () => clearTimeout(copyTimer.current), []); // не дёргать setCopied после размонтирования
+  const confirmTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Не дёргать setState после размонтирования (таймеры Copy-флага и «вооружённого» Kick).
+  useEffect(
+    () => () => {
+      clearTimeout(copyTimer.current);
+      clearTimeout(confirmTimer.current);
+    },
+    [],
+  );
+  // Состав лобби изменился (вход/выход/кик) → снять «вооружение» Kick: индексы могли сдвинуться, и
+  // второй клик выгнал бы не того, кого видел хозяин при первом клике (аудит c-1 M-1).
+  useEffect(() => {
+    setConfirmKick(null);
+    clearTimeout(confirmTimer.current);
+  }, [lobby?.players]);
 
   if (!lobby) return null; // роутер не показывает лобби без состава; защита от гонок размонтирования
 
@@ -38,6 +54,17 @@ export function LobbyScreen() {
     } catch {
       // Буфер недоступен (нет разрешения/контекста) — код всё равно виден на экране, можно набрать вручную.
     }
+  };
+  // Kick в два клика (без window.confirm): первый «вооружает» место, второй (в течение 3с) — выгоняет.
+  const armKick = (seat: number) => {
+    clearTimeout(confirmTimer.current);
+    if (confirmKick === seat) {
+      kickPlayer(seat);
+      setConfirmKick(null);
+      return;
+    }
+    setConfirmKick(seat);
+    confirmTimer.current = setTimeout(() => setConfirmKick(null), 3000);
   };
   const slots = Array.from({ length: lobby.capacity });
   // Роль хозяина — из СВЕЖЕГО состава лобби (не из store-поля): наследование хозяина на сервере сразу
@@ -72,6 +99,18 @@ export function LobbyScreen() {
                 <span className="seat__name">{p ? p.name : 'Waiting…'}</span>
                 {p?.isHost && <span className="seat__badge">host</span>}
                 {p && i === mySeat && <span className="seat__badge seat__badge--you">you</span>}
+                {amHost && p && i !== mySeat && (
+                  <button
+                    type="button"
+                    className={`seat__kick${confirmKick === i ? ' is-armed' : ''}`}
+                    onClick={() => armKick(i)}
+                    aria-label={
+                      confirmKick === i ? `Confirm removing ${p.name}` : `Remove ${p.name}`
+                    }
+                  >
+                    {confirmKick === i ? 'Confirm' : 'Kick'}
+                  </button>
+                )}
               </li>
             );
           })}

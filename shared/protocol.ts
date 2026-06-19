@@ -23,6 +23,7 @@ export const MSG = {
   create: 'room:create',
   join: 'room:join',
   start: 'room:start',
+  kick: 'room:kick', // хозяин выгоняет игрока из лобби (2.2.c-1)
   action: 'action',
   // сервер -> клиент
   joined: 'room:joined',
@@ -30,6 +31,7 @@ export const MSG = {
   full: 'room:full',
   notFound: 'room:not-found',
   alreadyStarted: 'room:already-started',
+  kicked: 'room:kicked', // тебя выгнал хозяин (2.2.c-1) — unicast жертве
   state: 'state',
   denied: 'denied',
 } as const;
@@ -66,6 +68,11 @@ export interface JoinRequest {
    * отбил `room:full`. Первый вход — без поля. Полноценный reconnect-токен на место — 2.4.c.
    */
   playerId?: string;
+}
+
+/** Хозяин выгоняет игрока из лобби (2.2.c-1): `seat` — индекс места жертвы в текущем составе лобби. */
+export interface KickRequest {
+  seat: number;
 }
 
 /** Подтверждение посадки: стабильный `playerId` места (для авторизации действий), индекс и роль. */

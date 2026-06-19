@@ -29,6 +29,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001';
  * - `full` — комната заполнена (4/4);
  * - `serverBusy` — сервер перегружен (cap комнат на процесс): create не удался (a-1: full с пустым roomId);
  * - `alreadyStarted` — партия в этой комнате уже идёт (код больше не пускает);
+ * - `kicked` — хозяин выгнал нас из лобби (2.2.c-1) — терминально, назад на экран входа;
  * - `waiting` — мы в комнате (лобби), ждём игроков/старта;
  * - `playing` — пришло первое состояние, идёт партия (роутер покажет GameScreen).
  */
@@ -40,6 +41,7 @@ export type OnlineStatus =
   | 'full'
   | 'serverBusy'
   | 'alreadyStarted'
+  | 'kicked'
   | 'waiting'
   | 'playing';
 
@@ -55,6 +57,8 @@ export interface OnlineSession {
   transport: Transport;
   /** Запустить партию (только хозяин; сервер проверяет роль). Сессионное действие, не игровое. */
   start: () => void;
+  /** Выгнать игрока из лобби по индексу места (только хозяин; сервер проверяет роль). Сессионное (2.2.c-1). */
+  kick: (seat: number) => void;
   /** Завершить сессию: отключить сокет и обнулить транспорт (вызывается при выходе в меню). */
   dispose: () => void;
 }
@@ -99,6 +103,7 @@ export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): 
   socket.on(MSG.full, (p) => closeWith((p as { roomId?: string })?.roomId ? 'full' : 'serverBusy'));
   socket.on(MSG.notFound, () => closeWith('notFound'));
   socket.on(MSG.alreadyStarted, () => closeWith('alreadyStarted'));
+  socket.on(MSG.kicked, () => closeWith('kicked')); // хозяин выгнал — терминально (2.2.c-1)
   socket.on(MSG.state, () => {
     if (!terminal) cb.onStatus('playing'); // пришло авторитетное состояние — партия пошла
   });
@@ -115,6 +120,7 @@ export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): 
   return {
     transport,
     start: () => socket.emit(MSG.start),
+    kick: (seat) => socket.emit(MSG.kick, { seat }),
     dispose: () => {
       terminal = true; // глушим поздние статус-эмиты (disconnect-хендлер после teardown — не 'connecting')
       transport.reset(); // reset() отключает сокет и помечает транспорт мёртвым (2.1.c)

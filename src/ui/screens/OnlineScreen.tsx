@@ -21,6 +21,7 @@ const STATUS_LABEL: Record<OnlineStatus, string> = {
   full: 'That room is full.',
   serverBusy: 'Server is busy right now. Try again in a moment.',
   alreadyStarted: 'That game has already started.',
+  kicked: 'The host removed you from the room.',
   waiting: 'Joining room…',
   playing: 'Starting…',
 };
@@ -58,7 +59,8 @@ export function OnlineScreen() {
       status === 'notFound' ||
       status === 'full' ||
       status === 'serverBusy' ||
-      status === 'alreadyStarted';
+      status === 'alreadyStarted' ||
+      status === 'kicked';
     return (
       <Screen className="coming">
         <div className="coming__inner">
