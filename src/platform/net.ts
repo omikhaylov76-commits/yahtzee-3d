@@ -19,7 +19,11 @@ import {
 import { NetworkTransport, type OnlineIntent } from '../transport/NetworkTransport';
 import type { Transport } from '../transport/Transport';
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001';
+// Адрес сервера платформы. В ПРОДЕ клиент раздаётся тем же сервером (same-origin, 2.P.1) → URL не нужен:
+// socket.io берёт origin страницы. В DEV клиент на Vite :5173, сервер на :3001 → явный localhost. Пустую
+// строку из `.env` (`VITE_SERVER_URL=`) трактуем как «не задано» (аудит m2: `??` её бы не отсёк).
+const ENV_URL = import.meta.env.VITE_SERVER_URL?.trim();
+const SERVER_URL = ENV_URL || (import.meta.env.DEV ? 'http://localhost:3001' : undefined);
 
 /**
  * Статус онлайн-сессии для экранов входа/лобби (2.2.a-2):
@@ -72,7 +76,10 @@ export interface OnlineSession {
  * (`create`/`join`) и reclaim на (ре)коннект делает `transport` в своём `connect`-обработчике.
  */
 export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): OnlineSession {
-  const socket = io(SERVER_URL, { auth: { protocolVersion: PROTOCOL_VERSION } });
+  // same-origin в проде (SERVER_URL undefined → io без URL берёт origin страницы); явный URL в dev.
+  const socket = SERVER_URL
+    ? io(SERVER_URL, { auth: { protocolVersion: PROTOCOL_VERSION } })
+    : io({ auth: { protocolVersion: PROTOCOL_VERSION } });
   // mismatch/full/notFound/alreadyStarted — «терминальные»: достигнув их, не перетираем статусом сокета.
   let terminal = false;
 
