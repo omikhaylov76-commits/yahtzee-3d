@@ -26,7 +26,8 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? 'http://localhost:3001';
  * - `offline` — сервер недоступен (connect_error);
  * - `mismatch` — версия протокола не совпала, нужен refresh (без ретраев);
  * - `notFound` — комната по коду не найдена (вход);
- * - `full` — комната заполнена (4/4) или сервер перегружен;
+ * - `full` — комната заполнена (4/4);
+ * - `serverBusy` — сервер перегружен (cap комнат на процесс): create не удался (a-1: full с пустым roomId);
  * - `alreadyStarted` — партия в этой комнате уже идёт (код больше не пускает);
  * - `waiting` — мы в комнате (лобби), ждём игроков/старта;
  * - `playing` — пришло первое состояние, идёт партия (роутер покажет GameScreen).
@@ -37,6 +38,7 @@ export type OnlineStatus =
   | 'mismatch'
   | 'notFound'
   | 'full'
+  | 'serverBusy'
   | 'alreadyStarted'
   | 'waiting'
   | 'playing';
@@ -93,7 +95,8 @@ export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): 
   socket.on(MSG.lobby, (p) => {
     if (!terminal) cb.onLobby(p as LobbyPayload);
   });
-  socket.on(MSG.full, () => closeWith('full'));
+  // Сервер шлёт full с пустым roomId при перегрузке (cap комнат, a-1) — различаем «занято» и «перегружен».
+  socket.on(MSG.full, (p) => closeWith((p as { roomId?: string })?.roomId ? 'full' : 'serverBusy'));
   socket.on(MSG.notFound, () => closeWith('notFound'));
   socket.on(MSG.alreadyStarted, () => closeWith('alreadyStarted'));
   socket.on(MSG.state, () => {

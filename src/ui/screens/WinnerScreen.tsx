@@ -10,6 +10,7 @@ import { totalsFor } from '../scoreView';
 /** Экран итогов: финальная таблица мест, подсветка победителя, рестарт. */
 export function WinnerScreen() {
   const state = useGameStore((s) => s.state);
+  const mode = useGameStore((s) => s.mode);
   const newGame = useGameStore((s) => s.newGame);
   const reset = useGameStore((s) => s.reset);
   const setView = useUiStore((s) => s.setView);
@@ -71,13 +72,26 @@ export function WinnerScreen() {
           </p>
         )}
 
+        {/* «Play again» по режиму (ADR-0014): локально — новая партия тем же составом; в сети `newGame`
+            не сработает (партию создаёт сервер), поэтому ведём в меню. Реванш той же комнатой — 2.4.b. */}
         <div className="winner__actions">
-          <Button variant="primary" onClick={playAgain}>
-            Play again
-          </Button>
-          <Button variant="ghost" onClick={toMenu}>
-            Main menu
-          </Button>
+          {mode === 'online' ? (
+            <>
+              <Button variant="primary" onClick={toMenu}>
+                Back to menu
+              </Button>
+              <p className="winner__rematch">Rematch with the same room — coming soon.</p>
+            </>
+          ) : (
+            <>
+              <Button variant="primary" onClick={playAgain}>
+                Play again
+              </Button>
+              <Button variant="ghost" onClick={toMenu}>
+                Main menu
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </Screen>

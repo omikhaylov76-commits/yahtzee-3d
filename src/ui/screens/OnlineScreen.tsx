@@ -7,18 +7,19 @@ import { useGameStore } from '../../state/gameStore';
 import type { OnlineStatus } from '../../platform/net';
 
 /**
- * Экран входа в онлайн (2.2.a-2): создать комнату (код выдаст сервер) или войти по коду друга.
- * Пока режим `local` — показываем форму; после `goOnline` (mode `online`) — статус соединения/ошибки.
- * Когда от сервера приходит состав лобби, роутер показывает `LobbyScreen` (этот экран размонтируется).
- * Имя — опциональное; сервер чистит его (`cleanName`), полная валидация — 2.2.b. Дизайн — a-3.
+ * Экран входа в онлайн (2.2.a-2 → полировка a-3): создать комнату (код выдаст сервер) или войти по
+ * коду друга. Пока режим `local` — форма с двумя путями; после `goOnline` (mode `online`) — статус
+ * соединения/ошибки. Когда приходит состав лобби, роутер показывает `LobbyScreen` (этот размонтируется).
+ * Имя опционально (сервер чистит его; полная валидация — 2.2.b).
  */
 const STATUS_LABEL: Record<OnlineStatus, string> = {
   connecting: 'Connecting…',
-  offline: 'Server is offline — try again later',
-  mismatch: 'Version mismatch — please refresh the page',
-  notFound: 'Room not found — check the code and try again',
-  full: 'That room is full',
-  alreadyStarted: 'That game has already started',
+  offline: 'Server is offline. Try again in a moment.',
+  mismatch: 'New version available. Refresh the page to play.',
+  notFound: 'No room with that code. Check it and try again.',
+  full: 'That room is full.',
+  serverBusy: 'Server is busy right now. Try again in a moment.',
+  alreadyStarted: 'That game has already started.',
   waiting: 'Joining room…',
   playing: 'Starting…',
 };
@@ -48,13 +49,14 @@ export function OnlineScreen() {
 
   // Подключаемся / ошибка входа: показываем статус. Лобби (успех) роутер покажет сам.
   if (mode === 'online') {
-    // Исправимые ошибки (опечатка в коде, занято, уже идёт, сервер недоступен) — даём «Try again»:
-    // `goLocal` гасит мёртвую сессию и возвращает к форме (mode→local), а введённые код/имя в стейте
-    // сохранены. (mismatch не сюда — там нужен refresh страницы.)
+    // Исправимые ошибки (опечатка, занято, идёт, сервер недоступен/занят) — даём «Try again»:
+    // `goLocal` гасит мёртвую сессию и возвращает к форме (mode→local), а код/имя в стейте сохранены.
+    // (mismatch не сюда — там нужен refresh страницы.)
     const retryable =
       status === 'offline' ||
       status === 'notFound' ||
       status === 'full' ||
+      status === 'serverBusy' ||
       status === 'alreadyStarted';
     return (
       <Screen className="coming">
@@ -89,17 +91,15 @@ export function OnlineScreen() {
           ← Back to menu
         </button>
 
-        <header className="coming__head">
+        <header className="coming__head online-entry__head">
           <Eyebrow>Online</Eyebrow>
           <h1 className="display coming__title">Play online</h1>
-          <p className="coming__sub">
-            Create a room and share the code, or join a friend&apos;s room.
-          </p>
+          <p className="coming__sub">Start a table and share the code, or join a friend by code.</p>
         </header>
 
-        <section className="start__panel">
+        <div className="online-field">
           <label className="field-label" htmlFor="online-name">
-            Your name <span className="field-opt">(optional)</span>
+            Your name <span className="field-opt">optional</span>
           </label>
           <input
             id="online-name"
@@ -110,9 +110,13 @@ export function OnlineScreen() {
             placeholder="Player"
             onChange={(e) => setName(e.target.value.slice(0, MAX_NAME))}
           />
-        </section>
+        </div>
 
-        <div className="online-entry__create">
+        <div className="online-card">
+          <div className="online-card__text">
+            <span className="online-card__title">Create a room</span>
+            <span className="online-card__desc">Start a new table and get a code to share.</span>
+          </div>
           <Button variant="primary" className="online-entry__cta" onClick={create}>
             Create room
           </Button>
@@ -122,9 +126,9 @@ export function OnlineScreen() {
           or
         </div>
 
-        <section className="start__panel">
+        <div className="online-card">
           <label className="field-label" htmlFor="online-code">
-            Room code
+            Join with a code
           </label>
           <div className="online-join">
             <input
@@ -150,7 +154,7 @@ export function OnlineScreen() {
               Join
             </Button>
           </div>
-        </section>
+        </div>
       </div>
     </Screen>
   );
