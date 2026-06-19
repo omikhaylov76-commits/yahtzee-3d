@@ -6,7 +6,7 @@ import { SoundControl } from './ui/components/SoundControl';
 import { Celebration } from './ui/components/Celebration';
 import { LoadingScreen } from './ui/screens/LoadingScreen';
 import { MenuScreen } from './ui/screens/MenuScreen';
-import { OnlineComingSoon } from './ui/screens/OnlineComingSoon';
+import { OnlineScreen } from './ui/screens/OnlineScreen';
 import { StartScreen } from './ui/screens/StartScreen';
 import { GameScreen } from './ui/screens/GameScreen';
 import { WinnerScreen } from './ui/screens/WinnerScreen';
@@ -62,7 +62,7 @@ export function App() {
   ) : view === 'localSetup' ? (
     <StartScreen />
   ) : view === 'online' ? (
-    <OnlineComingSoon />
+    <OnlineScreen />
   ) : (
     <MenuScreen />
   );

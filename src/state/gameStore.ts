@@ -9,6 +9,7 @@ import type { Category, DomainEvent, GameState } from '../core';
 import type { Transport } from '../transport/Transport';
 import { LocalTransport } from '../transport/LocalTransport';
 import { LocalStorageGameStorage } from '../storage/localStorageGameStorage';
+import { createOnlineSession, type OnlineSession, type OnlineStatus } from '../platform/net';
 
 export interface GameStoreState {
   /** Текущее состояние партии (null — игра не начата). */
@@ -43,6 +44,17 @@ export interface GameStoreState {
   toggleHold: (index: number) => void;
   score: (category: Category) => void;
   reset: () => void;
+  /**
+   * Режим активного транспорта (2.1.d-1). `local` — `LocalTransport` (hotseat/соло, автосейв);
+   * `online` — `NetworkTransport` поверх сокета. UI-экраны режим не знают (ADR-0003).
+   */
+  mode: 'local' | 'online';
+  /** Статус сетевой сессии для экрана соединения; null вне онлайна. */
+  onlineStatus: OnlineStatus | null;
+  /** Войти в онлайн: подменить активный транспорт сетевым (локальная партия/автосейв целы). */
+  goOnline: () => void;
+  /** Выйти из онлайна: отключить сетевой транспорт, вернуться на сохранённый локальный. */
+  goLocal: () => void;
 }
 
 const SOUND_KEY = 'yahtzee.sound.v1';
@@ -79,11 +91,28 @@ function saveSound(s: SoundSettings): void {
   }
 }
 
-/** Собрать стор поверх произвольного транспорта (используется и в тестах с MemoryStorage). */
-export function createGameStore(transport: Transport): StoreApi<GameStoreState> {
+/**
+ * Собрать стор поверх произвольного транспорта (используется и в тестах с MemoryStorage).
+ * `makeOnlineSession` — фабрика онлайн-сессии; по умолчанию реальная (сокет+`NetworkTransport`),
+ * в тестах подменяется фейком, чтобы проверить свап транспорта без сети (как инъекция сокета в 2.1.c).
+ */
+export function createGameStore(
+  localTransport: Transport,
+  makeOnlineSession: (
+    onStatus: (status: OnlineStatus) => void,
+  ) => OnlineSession = createOnlineSession,
+): StoreApi<GameStoreState> {
   const sound = loadSound();
+
+  // Активный транспорт можно подменять (local↔online, 2.1.d-1). Методы стора читают `active` в
+  // момент вызова, поэтому свап прозрачен для UI. `localTransport` живёт всё время (его автосейв
+  // не теряется при заходе в онлайн); сетевой транспорт создаётся на сессию.
+  let active: Transport = localTransport;
+  let session: OnlineSession | null = null;
+  let unsub: () => void = () => {};
+
   const store = createStore<GameStoreState>((set, get) => ({
-    state: transport.getState(),
+    state: active.getState(),
     events: [],
     settling: false,
     setSettling: (settling) => set({ settling }),
@@ -105,15 +134,43 @@ export function createGameStore(transport: Transport): StoreApi<GameStoreState> 
       set({ ambient });
       saveSound({ muted: get().muted, volume: get().volume, ambient });
     },
-    newGame: (players) => transport.dispatch({ type: 'NEW_GAME', players }),
-    roll: () => transport.dispatch({ type: 'ROLL' }),
-    toggleHold: (index) => transport.dispatch({ type: 'TOGGLE_HOLD', index }),
-    score: (category) => transport.dispatch({ type: 'SCORE', category }),
-    reset: () => transport.reset(),
+    newGame: (players) => active.dispatch({ type: 'NEW_GAME', players }),
+    roll: () => active.dispatch({ type: 'ROLL' }),
+    toggleHold: (index) => active.dispatch({ type: 'TOGGLE_HOLD', index }),
+    score: (category) => active.dispatch({ type: 'SCORE', category }),
+    reset: () => {
+      // В онлайне «сброс/выход в меню» = разорвать сетевую сессию и вернуться в локальный режим
+      // (локальную партию/автосейв НЕ трогаем — они не были активны). Иначе `mode` залип бы в
+      // 'online' с мёртвым транспортом: повторный онлайн и последующая локальная игра сломались бы.
+      if (get().mode === 'online') get().goLocal();
+      else active.reset();
+    },
+    mode: 'local',
+    onlineStatus: null,
+    goOnline: () => {
+      if (get().mode === 'online') return; // уже онлайн — повторный заход игнорируем
+      session = makeOnlineSession((onlineStatus) => store.setState({ onlineStatus }));
+      switchTo(session.transport);
+      set({ mode: 'online', onlineStatus: 'connecting' });
+    },
+    goLocal: () => {
+      if (get().mode === 'local') return;
+      session?.dispose(); // отключить сокет + обнулить сетевой транспорт (2.1.c reset)
+      session = null;
+      switchTo(localTransport); // вернуться на сохранённую локальную партию (state её, не сетевой)
+      set({ mode: 'local', onlineStatus: null });
+    },
   }));
 
-  // Обновления транспорта зеркалим в стор (состояние + события последнего действия).
-  transport.subscribe((state, events) => store.setState({ state, events }));
+  // Зеркалим обновления АКТИВНОГО транспорта в стор; при свапе переподписываемся и сразу
+  // показываем текущее состояние нового транспорта (события сбрасываем — это не игровое действие).
+  function switchTo(next: Transport): void {
+    unsub();
+    active = next;
+    unsub = active.subscribe((state, events) => store.setState({ state, events }));
+    store.setState({ state: active.getState(), events: [] });
+  }
+  unsub = active.subscribe((state, events) => store.setState({ state, events }));
 
   return store;
 }

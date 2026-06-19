@@ -584,7 +584,7 @@ body {
   max-width: 38ch;
   color: var(--text);
 }
-/* Строка статуса соединения с платформой (2.0.c). Точка-pip как индикатор. */
+/* Строка статуса соединения/комнаты онлайна (2.1.d-1). Точка-pip как индикатор. */
 .conn-status {
   display: inline-flex;
   align-items: center;
@@ -602,19 +602,23 @@ body {
   border-radius: 50%;
   background: var(--text-dim);
 }
-.conn-status--connected {
+.conn-status--waiting,
+.conn-status--playing {
   color: var(--ice);
 }
-.conn-status--connected::before {
+.conn-status--waiting::before,
+.conn-status--playing::before {
   background: var(--teal-dot);
   box-shadow: 0 0 8px 1px rgba(0, 179, 166, 0.8);
 }
 .conn-status--mismatch,
-.conn-status--offline {
+.conn-status--offline,
+.conn-status--full {
   color: var(--danger);
 }
 .conn-status--mismatch::before,
-.conn-status--offline::before {
+.conn-status--offline::before,
+.conn-status--full::before {
   background: var(--danger);
 }
 
