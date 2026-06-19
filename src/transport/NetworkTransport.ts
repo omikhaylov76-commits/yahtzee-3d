@@ -55,7 +55,7 @@ export class NetworkTransport implements Transport {
 
   constructor(
     private readonly socket: TransportSocket,
-    roomId: string = DEFAULT_ROOM,
+    private readonly roomId: string = DEFAULT_ROOM,
     private readonly makeActionId: () => string = () => crypto.randomUUID(),
   ) {
     socket.on(MSG.state, (p) => this.onState(p as StatePayload));
@@ -63,8 +63,23 @@ export class NetworkTransport implements Transport {
     socket.on(MSG.joined, (p) => {
       this.playerId = (p as JoinedPayload).playerId;
     });
+    // Вход в комнату — на КАЖДЫЙ (ре)коннект сокета (2.1.e-2). socket.io сам переподключается после
+    // блипа сети; первый раз входим в свежее место, на реконнекте называем свой playerId, чтобы
+    // сервер вернул в то же место (reclaim), а не отбил room:full.
+    socket.on('connect', () => this.join());
     // room:full / room:not-found — продуктовые состояния (2.2.d); здесь игнорируем.
-    socket.emit(MSG.join, { roomId });
+  }
+
+  /** (Пере)войти в комнату. На реконнекте несём playerId (reclaim) и сбрасываем застрявший pending. */
+  private join(): void {
+    if (this.disposed) return; // после reset сессию не воскрешаем
+    // In-flight действие на момент разрыва: авторитетный re-snapshot его разрулит (долетело — придёт
+    // версией выше и снимет pending; потеряно — даём повторить). Иначе контролы залипли бы по pending.
+    this.pendingActionId = null;
+    this.socket.emit(
+      MSG.join,
+      this.playerId ? { roomId: this.roomId, playerId: this.playerId } : { roomId: this.roomId },
+    );
   }
 
   getState(): GameState | null {

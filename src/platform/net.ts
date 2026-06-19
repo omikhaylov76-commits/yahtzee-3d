@@ -38,7 +38,7 @@ export interface OnlineSession {
 
 /**
  * Создать онлайн-сессию: подключиться к серверу, начать слать статус в `onStatus`, отдать
- * транспорт для подмены в сторе. `transport` сам шлёт `room:join` в конструкторе (2.1.c).
+ * транспорт для подмены в сторе. `transport` сам шлёт `room:join` на (ре)коннект сокета (2.1.e-2).
  */
 export function createOnlineSession(onStatus: (status: OnlineStatus) => void): OnlineSession {
   const socket = io(SERVER_URL, { auth: { protocolVersion: PROTOCOL_VERSION } });

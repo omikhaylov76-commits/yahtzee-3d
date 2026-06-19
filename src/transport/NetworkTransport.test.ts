@@ -49,10 +49,37 @@ function seqIds() {
 }
 
 describe('NetworkTransport — вход и состояние', () => {
-  it('на конструкции входит в комнату (room:join)', () => {
+  it('входит в комнату при connect (room:join без playerId на первом входе)', () => {
     const s = new FakeSocket();
     new NetworkTransport(s, 'dev', seqIds());
+    s.server('connect', undefined); // socket.io шлёт вход на (ре)коннект, не в конструкторе
     expect(s.sent[0]).toEqual({ event: MSG.join, payload: { roomId: 'dev' } });
+  });
+
+  it('реконнект пере-входит в то же место с playerId (reclaim)', () => {
+    const s = new FakeSocket();
+    const t = new NetworkTransport(s, 'dev', seqIds());
+    s.server('connect', undefined); // первый вход — без playerId
+    s.server(MSG.joined, { roomId: 'dev', playerId: 'seat-abc', seat: 0 });
+    s.server('connect', undefined); // реконнект — несём playerId для reclaim
+
+    const joins = s.sent.filter((m) => m.event === MSG.join).map((m) => m.payload);
+    expect(joins[0]).toEqual({ roomId: 'dev' });
+    expect(joins[1]).toEqual({ roomId: 'dev', playerId: 'seat-abc' });
+    expect(t.getPlayerId()).toBe('seat-abc');
+  });
+
+  it('реконнект сбрасывает застрявшее in-flight действие (pending)', () => {
+    const s = new FakeSocket();
+    const t = new NetworkTransport(s, 'dev', seqIds());
+    s.server('connect', undefined);
+    t.dispatch({ type: 'ROLL' }); // pending встал, ответа сервера нет (разрыв до прихода state)
+    expect(t.getPending()).toBe(true);
+
+    s.server('connect', undefined); // реконнект чистит pending
+    expect(t.getPending()).toBe(false);
+    t.dispatch({ type: 'ROLL' }); // и следующее действие снова уходит
+    expect(s.sent.filter((m) => m.event === MSG.action)).toHaveLength(2);
   });
 
   it('применяет более новую версию и уведомляет подписчиков', () => {
@@ -148,6 +175,17 @@ describe('NetworkTransport — denied и reset', () => {
 
     s.server(MSG.denied, { reason: 'no-game' }); // нет нашего pending
     expect(got).toHaveLength(0);
+  });
+
+  it('после reset() пришедший connect не шлёт room:join (анти-воскрешение)', () => {
+    const s = new FakeSocket();
+    const t = new NetworkTransport(s, 'dev', seqIds());
+    s.server('connect', undefined); // первый вход
+    const joinsBefore = s.sent.filter((m) => m.event === MSG.join).length;
+    t.reset();
+    s.server('connect', undefined); // поздний reconnect уже после reset — вход НЕ шлём
+    const joinsAfter = s.sent.filter((m) => m.event === MSG.join).length;
+    expect(joinsAfter).toBe(joinsBefore);
   });
 
   it('после reset поздний state с сокета игнорируется (не воскрешает партию)', () => {

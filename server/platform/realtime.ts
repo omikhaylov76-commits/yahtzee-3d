@@ -21,24 +21,13 @@ import {
   type JoinedPayload,
   type StatePayload,
 } from '../../shared/protocol';
-import { applyNetworkAction, startGame, type RoomState, type YahtzeeModule } from './rooms';
+import { applyNetworkAction, startGame, type YahtzeeModule } from './rooms';
+import { findReclaimSeat, type Room } from './seating';
 import { randomSeed, rollDiceValues } from './rng';
 
 const ROOM_CAPACITY = 2; // 2.1: партия двух вкладок. 3–4 игрока и коды — 2.2.
 const MIN_TO_START = 2;
 const DICE_COUNT = 5;
-
-interface Seat {
-  socketId: string | null;
-  playerId: string;
-  name: string;
-}
-
-interface Room {
-  id: string;
-  seats: Seat[];
-  game: RoomState | null; // null до старта
-}
 
 /** Лёгкая очистка имени гостя (анти-XSS/контрол-символы). Полная валидация (NFC/bidi/zod) — 2.2.b. */
 function cleanName(raw: string | undefined, seat: number): string {
@@ -87,6 +76,25 @@ export function attachRealtime(
     socket.on(MSG.join, (req: JoinRequest) => {
       const roomId = (req?.roomId ?? '').trim() || 'dev';
       let room = rooms.get(roomId);
+
+      // RECLAIM при реконнекте (2.1.e-2): вернувшийся клиент назвал свой playerId — возвращаем его в
+      // удерживаемое место идущей партии (а не отбиваем room:full) и досылаем текущее состояние.
+      const reclaim = room ? findReclaimSeat(room, req?.playerId) : undefined;
+      if (room && reclaim) {
+        reclaim.socketId = socket.id; // перепривязка на новый сокет (старый умрёт по ping-timeout)
+        sockets.set(socket.id, { roomId, playerId: reclaim.playerId });
+        socket.join(roomId);
+        const joined: JoinedPayload = {
+          roomId,
+          playerId: reclaim.playerId,
+          seat: room.seats.indexOf(reclaim),
+        };
+        socket.emit(MSG.joined, joined);
+        if (room.game) socket.emit(MSG.state, snapshot(room, [])); // инвариант #1 (e-1): несём state.dice
+        log.info({ roomId, playerId: reclaim.playerId }, 'player reclaimed seat');
+        return;
+      }
+
       if (!room) {
         room = { id: roomId, seats: [], game: null };
         rooms.set(roomId, room);
@@ -164,9 +172,11 @@ export function attachRealtime(
         // считается занятым и новый игрок в ту же комнату упрётся в room:full.
         room.seats = room.seats.filter((s) => s.playerId !== ctx.playerId);
       } else {
-        // Партия идёт: место держим за игроком (пауза/реконнект-арбитраж — 2.1.e/2.4).
+        // Партия идёт: место держим за игроком (reclaim при реконнекте — 2.1.e-2). Обнуляем ТОЛЬКО
+        // если место всё ещё за ЭТИМ сокетом: иначе поздний disconnect старого сокета (ping-timeout)
+        // затёр бы место, которое реконнект уже перепривязал на новый сокет.
         const seat = room.seats.find((s) => s.playerId === ctx.playerId);
-        if (seat) seat.socketId = null;
+        if (seat && seat.socketId === socket.id) seat.socketId = null;
       }
       log.info({ roomId: room.id, playerId: ctx.playerId }, 'player left');
       // Никого живого не осталось — убираем комнату (TTL/«остался один» — 2.2.d). Пустой seats тоже.
