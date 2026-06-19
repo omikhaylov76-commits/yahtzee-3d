@@ -10,11 +10,13 @@ interface CategoryRowProps {
   flash?: CellFlash | null;
   /** Свободные категории с максимумом очков — мягкий акцент «лучший вариант» (F6.5). */
   best?: Set<Category>;
+  /** Сетевой гейт (2.1.d-3): запись недоступна (чужой ход / pending / разрыв) — ячейка не кликабельна. */
+  disabled?: boolean;
 }
 
 /** Строка категории: подпись + ячейка на игрока. У активного игрока свободная ячейка —
  *  кликабельное превью очков; заполненная показывает записанное; чужие/недоступные — точка. */
-export function CategoryRow({ state, category, onScore, flash, best }: CategoryRowProps) {
+export function CategoryRow({ state, category, onScore, flash, best, disabled }: CategoryRowProps) {
   const preview = previewFor(state, category);
   const label = CATEGORY_LABELS[category];
 
@@ -46,7 +48,7 @@ export function CategoryRow({ state, category, onScore, flash, best }: CategoryR
           const isBest = !isZero && best?.has(category) === true;
           const previewCls = `${cls} scell--preview${isZero ? ' is-zero' : ''}${
             isBest ? ' is-best' : ''
-          }`;
+          }${disabled ? ' is-locked' : ''}`;
           return (
             <button
               key={i}
@@ -55,6 +57,7 @@ export function CategoryRow({ state, category, onScore, flash, best }: CategoryR
               role="cell"
               aria-label={`Score ${label}: ${preview}`}
               onClick={() => onScore(category)}
+              disabled={disabled}
             >
               {preview}
             </button>

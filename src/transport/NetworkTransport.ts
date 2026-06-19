@@ -101,9 +101,14 @@ export class NetworkTransport implements Transport {
     };
   }
 
-  /** Чей стабильный id у этого клиента (выдан сервером при входе). Пригодится UI в 2.1.d. */
+  /** Чей стабильный id у этого клиента (выдан сервером при входе). UI гейтит ход по нему (2.1.d-3). */
   getPlayerId(): string | null {
     return this.playerId;
+  }
+
+  /** Есть ли действие «в полёте» (ADR-0013). UI блокирует контролы, пока ждём ответ сервера (2.1.d-3). */
+  getPending(): boolean {
+    return this.pendingActionId !== null;
   }
 
   private onState(payload: StatePayload): void {

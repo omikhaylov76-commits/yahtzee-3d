@@ -51,10 +51,34 @@ export interface GameStoreState {
   mode: 'local' | 'online';
   /** Статус сетевой сессии для экрана соединения; null вне онлайна. */
   onlineStatus: OnlineStatus | null;
+  /**
+   * Стабильный id ЭТОГО клиента в сетевой партии (выдан сервером при входе); null в local или до
+   * входа. UI гейтит «мой ход» по нему (2.1.d-3). Зеркалится с активного сетевого транспорта.
+   */
+  myPlayerId: string | null;
+  /**
+   * Сетевое действие «в полёте» — отправлено, ждём авторитетный ответ сервера (ADR-0013). Пока true,
+   * UI блокирует контролы (анти-двойной Roll/Score). Всегда false в local-режиме (2.1.d-3).
+   */
+  pending: boolean;
   /** Войти в онлайн: подменить активный транспорт сетевым (локальная партия/автосейв целы). */
   goOnline: () => void;
   /** Выйти из онлайна: отключить сетевой транспорт, вернуться на сохранённый локальный. */
   goLocal: () => void;
+}
+
+/**
+ * Узкий «сетевой» подмешок транспорта (его реализует `NetworkTransport`, но НЕ `LocalTransport`):
+ * стор читает эти геттеры duck-typing'ом, не расширяя общий контракт `Transport` (2.1.d-3).
+ */
+interface NetworkAware {
+  getPlayerId(): string | null;
+  getPending(): boolean;
+}
+
+function isNetworkAware(t: unknown): t is NetworkAware {
+  const c = t as Partial<NetworkAware>;
+  return typeof c.getPlayerId === 'function' && typeof c.getPending === 'function';
 }
 
 const SOUND_KEY = 'yahtzee.sound.v1';
@@ -135,9 +159,20 @@ export function createGameStore(
       saveSound({ muted: get().muted, volume: get().volume, ambient });
     },
     newGame: (players) => active.dispatch({ type: 'NEW_GAME', players }),
-    roll: () => active.dispatch({ type: 'ROLL' }),
-    toggleHold: (index) => active.dispatch({ type: 'TOGGLE_HOLD', index }),
-    score: (category) => active.dispatch({ type: 'SCORE', category }),
+    // После dispatch зеркалим сетевой `pending` (он синхронно встаёт в true), чтобы UI сразу
+    // заблокировал контролы; снимется обратно в колбэке подписки при приходе состояния/denied (2.1.d-3).
+    roll: () => {
+      active.dispatch({ type: 'ROLL' });
+      mirrorNet();
+    },
+    toggleHold: (index) => {
+      active.dispatch({ type: 'TOGGLE_HOLD', index });
+      mirrorNet();
+    },
+    score: (category) => {
+      active.dispatch({ type: 'SCORE', category });
+      mirrorNet();
+    },
     reset: () => {
       // В онлайне «сброс/выход в меню» = разорвать сетевую сессию и вернуться в локальный режим
       // (локальную партию/автосейв НЕ трогаем — они не были активны). Иначе `mode` залип бы в
@@ -147,6 +182,8 @@ export function createGameStore(
     },
     mode: 'local',
     onlineStatus: null,
+    myPlayerId: null,
+    pending: false,
     goOnline: () => {
       if (get().mode === 'online') return; // уже онлайн — повторный заход игнорируем
       session = makeOnlineSession((onlineStatus) => store.setState({ onlineStatus }));
@@ -167,15 +204,32 @@ export function createGameStore(
     },
   }));
 
+  // Зеркалим «сетевые» поля (мой id места + действие в полёте) с активного транспорта. В local
+  // (или до входа) геттеров нет — поля сбрасываются в null/false, и гейтинг ввода выключен (2.1.d-3).
+  function mirrorNet(): void {
+    if (store.getState().mode === 'online' && isNetworkAware(active)) {
+      store.setState({ myPlayerId: active.getPlayerId(), pending: active.getPending() });
+    } else {
+      store.setState({ myPlayerId: null, pending: false });
+    }
+  }
+
   // Зеркалим обновления АКТИВНОГО транспорта в стор; при свапе переподписываемся и сразу
   // показываем текущее состояние нового транспорта (события сбрасываем — это не игровое действие).
   function switchTo(next: Transport): void {
     unsub();
     active = next;
-    unsub = active.subscribe((state, events) => store.setState({ state, events }));
+    unsub = active.subscribe((state, events) => {
+      store.setState({ state, events });
+      mirrorNet(); // приход авторитетного состояния/denied снимает pending, обновляет playerId
+    });
     store.setState({ state: active.getState(), events: [] });
+    mirrorNet();
   }
-  unsub = active.subscribe((state, events) => store.setState({ state, events }));
+  unsub = active.subscribe((state, events) => {
+    store.setState({ state, events });
+    mirrorNet();
+  });
 
   return store;
 }
@@ -189,4 +243,46 @@ export const gameStore = createGameStore(defaultTransport);
 /** Хук для React-компонентов: подписка на срез стора. */
 export function useGameStore<T>(selector: (s: GameStoreState) => T): T {
   return useStore(gameStore, selector);
+}
+
+/** Чей сейчас ход — это id ЭТОГО клиента (только в сети; в local понятие неприменимо). */
+function isMyTurn(s: GameStoreState): boolean {
+  const st = s.state;
+  if (!st || s.myPlayerId == null) return false;
+  return st.players[st.current]?.id === s.myPlayerId;
+}
+
+/**
+ * Заблокирован ли пользовательский ввод (контролы Roll/Nudge/hold и запись очков). В сети — когда
+ * нет живой партии (соединение/ожидание), действие в полёте (`pending`) или ход соперника. В local
+ * всегда false — поведение Вехи 1 без изменений (2.1.d-3). Чистая функция: тестируется без React.
+ */
+export function selectInputLocked(s: GameStoreState): boolean {
+  if (s.mode !== 'online') return false;
+  if (s.onlineStatus !== 'playing') return true; // нет авторитетной партии (разрыв/ожидание)
+  if (s.pending) return true; // ждём ответ сервера на наше действие
+  return !isMyTurn(s);
+}
+
+/**
+ * Текст баннера-подсказки для сетевой партии (или null — баннера нет). Приоритет: нет соединения →
+ * ход соперника. `pending` баннера не показывает (краткий — достаточно блокировки кнопок) (2.1.d-3).
+ */
+export function selectTurnBanner(s: GameStoreState): string | null {
+  if (s.mode !== 'online') return null;
+  if (s.onlineStatus !== 'playing') return 'Connection lost — reconnecting…';
+  // Пока сервер не сообщил наше место (`myPlayerId == null`), не утверждаем «ход соперника» — это
+  // могло бы соврать в короткое окно реконнекта (2.1.e). Ввод всё равно заблокирован (fail-safe).
+  if (s.myPlayerId == null || !s.state) return null;
+  return isMyTurn(s) ? null : "Opponent's turn";
+}
+
+/** Хук: заблокирован ли ввод (см. `selectInputLocked`). Зовут `GameScreen` и `ScoreTable`. */
+export function useInputLocked(): boolean {
+  return useStore(gameStore, selectInputLocked);
+}
+
+/** Хук: текст баннера сетевой партии или null (см. `selectTurnBanner`). */
+export function useTurnBanner(): string | null {
+  return useStore(gameStore, selectTurnBanner);
 }

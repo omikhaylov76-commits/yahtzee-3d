@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createGameStore } from './gameStore';
+import { createGameStore, selectInputLocked, selectTurnBanner } from './gameStore';
 import { LocalTransport } from '../transport/LocalTransport';
 import { MemoryGameStorage } from '../storage/memoryGameStorage';
 import type { Transport, TransportListener } from '../transport/Transport';
@@ -14,10 +14,15 @@ function freshStore() {
   return { store: createGameStore(transport), storage };
 }
 
-/** Фейковый сетевой транспорт для теста свапа: пишет действия и умеет «прислать состояние». */
+/** Фейковый сетевой транспорт для теста свапа: пишет действия и умеет «прислать состояние».
+ *  Имитирует и «сетевые» геттеры `NetworkTransport` (playerId места + pending), которые стор
+ *  зеркалит для гейтинга ввода (2.1.d-3). */
 class FakeNetTransport implements Transport {
   readonly dispatched: Action[] = [];
   resetCalls = 0;
+  /** id места этого клиента (как сервер выдаёт в `joined`). */
+  playerId: string | null = null;
+  private pending = false;
   private state: GameState | null = null;
   private readonly listeners = new Set<TransportListener>();
   getState() {
@@ -25,6 +30,7 @@ class FakeNetTransport implements Transport {
   }
   dispatch(action: Action) {
     this.dispatched.push(action);
+    this.pending = true; // как в NetworkTransport: действие «в полёте» до ответа сервера
   }
   reset() {
     this.resetCalls += 1;
@@ -33,11 +39,30 @@ class FakeNetTransport implements Transport {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
-  /** Имитировать приход состояния от сервера. */
+  /** Имитировать приход состояния от сервера (снимает pending, как авторитетный ответ). */
   push(state: GameState | null, events: DomainEvent[] = []) {
     this.state = state;
+    this.pending = false;
     for (const l of this.listeners) l(state, events);
   }
+  getPlayerId() {
+    return this.playerId;
+  }
+  getPending() {
+    return this.pending;
+  }
+}
+
+/** Минимальное «играбельное» сетевое состояние: двое игроков с id, чей ход — `currentId`. */
+function netState(currentId: 'A' | 'B'): GameState {
+  return {
+    players: [
+      { id: 'A', name: 'A' },
+      { id: 'B', name: 'B' },
+    ],
+    current: currentId === 'A' ? 0 : 1,
+    phase: 'playing',
+  } as unknown as GameState;
 }
 
 describe('gameStore (мост)', () => {
@@ -177,5 +202,87 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
     store.getState().goLocal();
     store.getState().goLocal(); // уже local — no-op
     expect(dispose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('gameStore — сетевой гейтинг ввода (2.1.d-3)', () => {
+  function onlineStore() {
+    const storage = new MemoryGameStorage();
+    const local = new LocalTransport(storage, () => 1);
+    const net = new FakeNetTransport();
+    let statusCb: ((s: import('../platform/net').OnlineStatus) => void) | null = null;
+    const make = (onStatus: (s: import('../platform/net').OnlineStatus) => void): OnlineSession => {
+      statusCb = onStatus;
+      return { transport: net, dispose: vi.fn() };
+    };
+    const store = createGameStore(local, make);
+    return { store, net, status: () => statusCb };
+  }
+
+  /** Войти в онлайн как игрок `me`, получить «играбельное» состояние с ходом `currentId`. */
+  function enterOnline(me: 'A' | 'B', currentId: 'A' | 'B') {
+    const ctx = onlineStore();
+    ctx.store.getState().goOnline();
+    ctx.net.playerId = me;
+    ctx.status()?.('playing');
+    ctx.net.push(netState(currentId));
+    return ctx;
+  }
+
+  it('myPlayerId зеркалится из сетевого транспорта', () => {
+    const { store } = enterOnline('A', 'A');
+    expect(store.getState().myPlayerId).toBe('A');
+  });
+
+  it('pending встаёт после действия и снимается на приходе состояния', () => {
+    const { store, net } = enterOnline('A', 'A');
+    expect(store.getState().pending).toBe(false);
+    store.getState().roll();
+    expect(store.getState().pending).toBe(true); // действие в полёте — блокируем ввод
+    net.push(netState('B')); // сервер ответил, ход перешёл
+    expect(store.getState().pending).toBe(false);
+  });
+
+  it('selectInputLocked: разблокирован в свой ход, заблокирован в чужой', () => {
+    const mine = enterOnline('A', 'A');
+    expect(selectInputLocked(mine.store.getState())).toBe(false);
+    expect(selectTurnBanner(mine.store.getState())).toBeNull();
+
+    const theirs = enterOnline('A', 'B');
+    expect(selectInputLocked(theirs.store.getState())).toBe(true);
+    expect(selectTurnBanner(theirs.store.getState())).toBe("Opponent's turn");
+  });
+
+  it('selectInputLocked: заблокирован, пока действие в полёте (pending)', () => {
+    const { store } = enterOnline('A', 'A');
+    store.getState().roll();
+    expect(selectInputLocked(store.getState())).toBe(true);
+    expect(selectTurnBanner(store.getState())).toBeNull(); // pending баннера не показывает
+  });
+
+  it('myPlayerId ещё неизвестен (null) при playing: заблокирован, но баннер не врёт «чужой ход»', () => {
+    const ctx = onlineStore();
+    ctx.store.getState().goOnline();
+    ctx.status()?.('playing');
+    ctx.net.push(netState('A')); // состояние пришло, но joined ещё не выдал нам playerId
+    expect(ctx.store.getState().myPlayerId).toBeNull();
+    expect(selectInputLocked(ctx.store.getState())).toBe(true); // fail-safe
+    expect(selectTurnBanner(ctx.store.getState())).toBeNull(); // не утверждаем «Opponent's turn»
+  });
+
+  it('selectInputLocked: заблокирован при потере соединения (статус не playing)', () => {
+    const { store, status } = enterOnline('A', 'A');
+    status()?.('connecting'); // разрыв: socket.io переподключается
+    expect(selectInputLocked(store.getState())).toBe(true);
+    expect(selectTurnBanner(store.getState())).toBe('Connection lost — reconnecting…');
+  });
+
+  it('local-режим: ввод никогда не заблокирован, баннера нет (без регрессий Вехи 1)', () => {
+    const { store } = freshStore();
+    store.getState().newGame(players);
+    expect(selectInputLocked(store.getState())).toBe(false);
+    expect(selectTurnBanner(store.getState())).toBeNull();
+    store.getState().roll();
+    expect(selectInputLocked(store.getState())).toBe(false);
   });
 });

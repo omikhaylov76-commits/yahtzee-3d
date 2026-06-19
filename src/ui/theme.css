@@ -721,6 +721,21 @@ body {
   text-transform: uppercase;
   color: var(--text-dim);
 }
+/* 2.1.d-3: сетевой баннер-подсказка («ход соперника» / «соединение потеряно»). Спокойный,
+   не кричащий — это статус, не ошибка; в local не рендерится. */
+.turn__banner {
+  margin: var(--s-3) 0 0;
+  padding: 4px 12px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ice);
+  background: rgba(0, 130, 124, 0.16);
+  border: 1px solid rgba(203, 255, 252, 0.22);
+  border-radius: 999px;
+}
 .turn__sep {
   width: 1px;
   height: 16px;
@@ -1031,6 +1046,16 @@ body {
   color: var(--text);
   background: rgba(237, 255, 254, 0.06);
   border-color: rgba(237, 255, 254, 0.18);
+}
+/* 2.1.d-3: запись недоступна в сети (чужой ход / pending / разрыв) — превью видно, но приглушено
+   и не кликабельно (button[disabled] уже снимает клик; здесь только вид). */
+.scell--preview.is-locked,
+.scell--preview.is-locked:hover {
+  color: var(--text-dim);
+  background: transparent;
+  border-color: transparent;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Бонус / итог */

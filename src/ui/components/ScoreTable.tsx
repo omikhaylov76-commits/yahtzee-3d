@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { Category } from '../../core';
-import { useGameStore } from '../../state/gameStore';
+import { useGameStore, useInputLocked } from '../../state/gameStore';
 import { CategoryRow } from './CategoryRow';
 import {
   LOWER,
@@ -26,6 +26,8 @@ export function ScoreTable() {
   const state = useGameStore((s) => s.state);
   const score = useGameStore((s) => s.score);
   const events = useGameStore((s) => s.events);
+  // Сетевой гейтинг (2.1.d-3): в чужой ход / pending / при разрыве запись очков недоступна. В local — false.
+  const locked = useInputLocked();
 
   // F6.1 микроанимации: реагируем на доменные события ядра, в правила не лезем.
   // Пульс ячейки при записи очков.
@@ -87,7 +89,15 @@ export function ScoreTable() {
         </div>
       </div>
       {UPPER.map((c) => (
-        <CategoryRow key={c} state={state} category={c} onScore={score} flash={flash} best={best} />
+        <CategoryRow
+          key={c}
+          state={state}
+          category={c}
+          onScore={score}
+          flash={flash}
+          best={best}
+          disabled={locked}
+        />
       ))}
 
       {/* Верхний бонус: начисленные +35 или читаемый прогресс до порога (F7.2). */}
@@ -135,7 +145,15 @@ export function ScoreTable() {
         </div>
       </div>
       {LOWER.map((c) => (
-        <CategoryRow key={c} state={state} category={c} onScore={score} flash={flash} best={best} />
+        <CategoryRow
+          key={c}
+          state={state}
+          category={c}
+          onScore={score}
+          flash={flash}
+          best={best}
+          disabled={locked}
+        />
       ))}
 
       {/* Бонусные Yahtzee */}

@@ -8,7 +8,7 @@ import { ScoreTable } from '../components/ScoreTable';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { hasWebGL } from '../capabilities';
 import { totalsFor } from '../scoreView';
-import { useGameStore } from '../../state/gameStore';
+import { useGameStore, useInputLocked, useTurnBanner } from '../../state/gameStore';
 import { useUiStore } from '../../state/uiStore';
 
 // F6.4: 3D-арена (Three.js + Rapier WASM, ~3 МБ) грузится ЛЕНИВО отдельным чанком — только
@@ -43,6 +43,10 @@ export function GameScreen() {
   const nudge = useGameStore((s) => s.nudge);
   const reset = useGameStore((s) => s.reset);
   const mode = useGameStore((s) => s.mode);
+  // Сетевой гейтинг ввода (2.1.d-3): в local оба «выключены» (locked=false, banner=null) — поведение
+  // Вехи 1 не меняется. В сети блокируем контролы в чужой ход / pending / при разрыве и поясняем баннером.
+  const locked = useInputLocked();
+  const banner = useTurnBanner();
   const setView = useUiStore((s) => s.setView);
 
   // Выход в меню из НЕЗАВЕРШЁННОЙ партии (2.1.d-2): двухшаговое подтверждение, чтобы случайно не
@@ -90,12 +94,17 @@ export function GameScreen() {
   if (!state) return null; // роутер не покажет этот экран без партии
 
   const current = state.players[state.current];
-  // Пока кости летят (settling), бросок недоступен — ждём, когда 3D их «успокоит».
-  const canRoll = state.phase === 'playing' && state.rollsLeft > 0 && !settling;
+  // Пока кости летят (settling), бросок недоступен — ждём, когда 3D их «успокоит». В сети поверх
+  // накладывается серверный гейт `locked` (чужой ход / pending / разрыв) — ADR-0013, 2.1.d-3.
+  const canRoll = state.phase === 'playing' && state.rollsLeft > 0 && !settling && !locked;
   const canHold =
-    state.phase === 'playing' && state.rolledThisTurn && state.rollsLeft > 0 && !settling;
+    state.phase === 'playing' &&
+    state.rolledThisTurn &&
+    state.rollsLeft > 0 &&
+    !settling &&
+    !locked;
   // Nudge доступен, когда есть что трясти: кости брошены и лежат (не в полёте).
-  const canNudge = state.phase === 'playing' && state.rolledThisTurn && !settling;
+  const canNudge = state.phase === 'playing' && state.rolledThisTurn && !settling && !locked;
 
   // 2D-кости: и как путь без WebGL, и как запасной вариант при сбое загрузки 3D-чанка (F6.4).
   const dice2D = (
@@ -149,6 +158,12 @@ export function GameScreen() {
               <span className="turn__sep" aria-hidden="true" />
               <RollCounter rollsLeft={state.rollsLeft} />
             </div>
+            {/* Сетевой баннер (2.1.d-3): «ход соперника» / «соединение потеряно». В local — null. */}
+            {banner && (
+              <p className="turn__banner" role="status">
+                {banner}
+              </p>
+            )}
           </header>
 
           {use3D ? (
