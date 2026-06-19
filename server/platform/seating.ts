@@ -77,3 +77,22 @@ export function findReclaimSeat(room: Room, playerId: string | undefined): Seat 
   if (!playerId) return undefined;
   return room.seats.find((s) => s.playerId === playerId);
 }
+
+/**
+ * Развести одинаковые имена в комнате (2.2.b): если `name` уже занято кем-то из `existing` (сравнение
+ * РЕГИСТРОНЕЗАВИСИМО — «Alice» и «alice» считаем одним), вернуть «name (2)», «name (3)»… до первого
+ * свободного; иначе вернуть `name` как есть. Имена приходят уже нормализованными (`normalizeName` из
+ * shared/names), так что сравниваем простым `toLocaleLowerCase`. Суффикс может вывести длину чуть за
+ * `MAX_NAME_LEN` (два игрока с предельно длинными одинаковыми именами) — это лишь отображение в лобби,
+ * не вопрос безопасности.
+ */
+export function dedupeName(existing: string[], name: string): string {
+  const taken = new Set(existing.map((n) => n.toLocaleLowerCase()));
+  if (!taken.has(name.toLocaleLowerCase())) return name;
+  // Кандидатов «(2)»… больше, чем занятых мест, => свободный гарантированно найдётся в этом диапазоне.
+  for (let n = 2; n <= existing.length + 2; n++) {
+    const candidate = `${name} (${n})`;
+    if (!taken.has(candidate.toLocaleLowerCase())) return candidate;
+  }
+  return name; // недостижимо (принцип Дирихле) — страховка для типобезопасности
+}

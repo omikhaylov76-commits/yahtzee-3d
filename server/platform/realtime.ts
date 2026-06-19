@@ -23,9 +23,11 @@ import {
   type JoinedPayload,
   type StatePayload,
 } from '../../shared/protocol';
+import { normalizeName } from '../../shared/names';
 import { applyNetworkAction, startGame, type YahtzeeModule } from './rooms';
 import {
   canStart,
+  dedupeName,
   ensureHost,
   findReclaimSeat,
   lobbySnapshot,
@@ -44,19 +46,6 @@ const MAX_JOIN_FAILS = 10; // анти-перебор кода: после се�
 const JOIN_LOCK_MS = 30_000;
 const MAX_CREATE_PER_SOCKET = 20; // анти-спам создания комнат с одного соединения
 const MAX_MSG_BYTES = 4096; // лимит размера любого сокет-сообщения (анти-абьюз)
-
-/** Лёгкая очистка имени гостя (анти-XSS/контрол-символы). Полная валидация (NFC/bidi/zod) — 2.2.b. */
-function cleanName(raw: string | undefined, seat: number): string {
-  const s = [...(raw ?? '')]
-    .filter((ch) => {
-      const c = ch.codePointAt(0) ?? 0;
-      return c > 0x1f && c !== 0x7f && ch !== '<' && ch !== '>';
-    })
-    .join('')
-    .trim()
-    .slice(0, 20);
-  return s || `Player ${seat + 1}`;
-}
 
 export function attachRealtime(
   httpServer: HttpServer,
@@ -137,7 +126,13 @@ export function attachRealtime(
     function addSeat(room: Room, rawName: string | undefined, isHost: boolean): JoinedPayload {
       const seat = room.seats.length;
       const playerId = `seat-${randomUUID().slice(0, 8)}`;
-      room.seats.push({ socketId: socket.id, playerId, name: cleanName(rawName, seat), isHost });
+      // Имя: общий фильтр (NFC/невидимки/XSS/длина — shared/names) → дефолт по месту → дедуп в комнате.
+      const base = normalizeName(rawName) || `Player ${seat + 1}`;
+      const name = dedupeName(
+        room.seats.map((s) => s.name),
+        base,
+      );
+      room.seats.push({ socketId: socket.id, playerId, name, isHost });
       sockets.set(socket.id, { roomId: room.id, playerId });
       socket.join(room.id);
       return { roomId: room.id, playerId, seat, isHost };

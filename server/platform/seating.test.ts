@@ -1,10 +1,12 @@
 /**
- * Тесты чистой рассадки (2.1.e-2 → 2.2.a-1): reclaim места при реконнекте, состав лобби, готовность
- * к старту, наследование хозяина. Сокетов нет — гоняем чистые функции на простых объектах комнаты.
+ * Тесты чистой рассадки (2.1.e-2 → 2.2.a-1 → 2.2.b): reclaim места при реконнекте, состав лобби,
+ * готовность к старту, наследование хозяина, дедуп одинаковых имён. Сокетов нет — гоняем чистые
+ * функции на простых объектах комнаты.
  */
 import { describe, it, expect } from 'vitest';
 import {
   canStart,
+  dedupeName,
   ensureHost,
   findReclaimSeat,
   lobbySnapshot,
@@ -102,5 +104,25 @@ describe('ensureHost', () => {
   it('возвращает undefined, если живых мест не осталось', () => {
     const r = room([seat('a', { socketId: null, isHost: true })]);
     expect(ensureHost(r)).toBeUndefined();
+  });
+});
+
+describe('dedupeName', () => {
+  it('нет коллизии → имя как есть', () => {
+    expect(dedupeName(['Alice'], 'Bob')).toBe('Bob');
+    expect(dedupeName([], 'Alice')).toBe('Alice');
+  });
+
+  it('коллизия → суффикс (2), затем (3)', () => {
+    expect(dedupeName(['Alice'], 'Alice')).toBe('Alice (2)');
+    expect(dedupeName(['Alice', 'Alice (2)'], 'Alice')).toBe('Alice (3)');
+  });
+
+  it('сравнение регистронезависимо', () => {
+    expect(dedupeName(['alice'], 'Alice')).toBe('Alice (2)');
+  });
+
+  it('дефолтные имена «Player N» уже уникальны по месту', () => {
+    expect(dedupeName(['Player 1'], 'Player 2')).toBe('Player 2');
   });
 });

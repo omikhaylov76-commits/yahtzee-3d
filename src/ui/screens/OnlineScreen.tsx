@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { useUiStore } from '../../state/uiStore';
 import { useGameStore } from '../../state/gameStore';
 import type { OnlineStatus } from '../../platform/net';
+import { normalizeName, MAX_NAME_LEN } from '../../../shared/names';
 
 /**
  * Экран входа в онлайн (2.2.a-2 → полировка a-3): создать комнату (код выдаст сервер) или войти по
@@ -24,7 +25,6 @@ const STATUS_LABEL: Record<OnlineStatus, string> = {
   playing: 'Starting…',
 };
 
-const MAX_NAME = 20;
 const CODE_LEN = 6;
 
 export function OnlineScreen() {
@@ -36,11 +36,12 @@ export function OnlineScreen() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
 
-  const trimmedName = () => name.trim() || undefined;
-  const create = () => goOnline({ type: 'create', name: trimmedName() });
+  // Чистим имя тем же общим фильтром, что и сервер (shared/names); серверная очистка всё равно финальна.
+  const cleanedName = () => normalizeName(name) || undefined;
+  const create = () => goOnline({ type: 'create', name: cleanedName() });
   const join = () => {
     const c = code.trim();
-    if (c) goOnline({ type: 'join', code: c, name: trimmedName() });
+    if (c) goOnline({ type: 'join', code: c, name: cleanedName() });
   };
   const backToMenu = () => {
     goLocal();
@@ -106,9 +107,9 @@ export function OnlineScreen() {
             className="player-row__input"
             type="text"
             value={name}
-            maxLength={MAX_NAME}
+            maxLength={MAX_NAME_LEN}
             placeholder="Player"
-            onChange={(e) => setName(e.target.value.slice(0, MAX_NAME))}
+            onChange={(e) => setName(e.target.value.slice(0, MAX_NAME_LEN))}
           />
         </div>
 
