@@ -5,6 +5,7 @@
  */
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
+import { roomCodeFromUrl } from '../platform/deepLink';
 
 export type View = 'menu' | 'localSetup' | 'online';
 
@@ -15,7 +16,8 @@ export interface UiState {
 }
 
 export const uiStore = createStore<UiState>((set) => ({
-  view: 'menu',
+  // Deep-link `?room=CODE` (2.2.c-2): открываем экран входа, чтобы предзаполнить код; иначе — меню.
+  view: roomCodeFromUrl() ? 'online' : 'menu',
   setView: (view) => set({ view }),
 }));
 

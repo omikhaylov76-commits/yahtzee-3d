@@ -6,6 +6,7 @@ import { useUiStore } from '../../state/uiStore';
 import { useGameStore } from '../../state/gameStore';
 import type { OnlineStatus } from '../../platform/net';
 import { normalizeName, MAX_NAME_LEN } from '../../../shared/names';
+import { roomCodeFromUrl } from '../../platform/deepLink';
 
 /**
  * Экран входа в онлайн (2.2.a-2 → полировка a-3): создать комнату (код выдаст сервер) или войти по
@@ -35,7 +36,7 @@ export function OnlineScreen() {
   const mode = useGameStore((s) => s.mode);
   const status = useGameStore((s) => s.onlineStatus) ?? 'connecting';
   const [name, setName] = useState('');
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(() => roomCodeFromUrl() ?? ''); // предзаполнение из deep-link (2.2.c-2)
 
   // Чистим имя тем же общим фильтром, что и сервер (shared/names); серверная очистка всё равно финальна.
   const cleanedName = () => normalizeName(name) || undefined;

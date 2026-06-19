@@ -4,12 +4,14 @@ import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
 import { useUiStore } from '../../state/uiStore';
 import { useGameStore } from '../../state/gameStore';
+import { roomInviteUrl } from '../../platform/deepLink';
 
 /**
  * Лобби онлайн-комнаты (2.2.a-2 → полировка a-3, Auros). Герой — код комнаты (им делятся): крупный
  * моно + Copy. Места «за столом» с фирменным pip-маркером (занято/ждём) и бейджами host/you. У хозяина —
  * Start (активна с 2 игроков), у всех — Leave. Показывается, пока `lobby && !state`; со стартом приходит
- * state и роутер уводит в GameScreen. Полный реванш/copy-link/share — 2.2.c/2.4.b.
+ * state и роутер уводит в GameScreen. Copy кода + Share ссылки + счётчик «кого ждём» — 2.2.c-2; у хозяина
+ * Kick возле чужих мест — 2.2.c-1. Полный реванш — 2.4.b.
  */
 export function LobbyScreen() {
   const lobby = useGameStore((s) => s.lobby);
@@ -20,13 +22,16 @@ export function LobbyScreen() {
   const goLocal = useGameStore((s) => s.goLocal);
   const setView = useUiStore((s) => s.setView);
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
   const [confirmKick, setConfirmKick] = useState<number | null>(null);
   const copyTimer = useRef<ReturnType<typeof setTimeout>>();
+  const shareTimer = useRef<ReturnType<typeof setTimeout>>();
   const confirmTimer = useRef<ReturnType<typeof setTimeout>>();
   // Не дёргать setState после размонтирования (таймеры Copy-флага и «вооружённого» Kick).
   useEffect(
     () => () => {
       clearTimeout(copyTimer.current);
+      clearTimeout(shareTimer.current);
       clearTimeout(confirmTimer.current);
     },
     [],
@@ -55,6 +60,30 @@ export function LobbyScreen() {
       // Буфер недоступен (нет разрешения/контекста) — код всё равно виден на экране, можно набрать вручную.
     }
   };
+  // Поделиться ссылкой-приглашением: на телефоне — нативный лист (navigator.share); на десктопе (нет Web
+  // Share) — копируем ссылку в буфер. Отмену листа (AbortError) глотаем без фолбэка-копии.
+  const share = async () => {
+    if (!roomCode) return;
+    const url = roomInviteUrl(roomCode);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Yahtzee 3D', url });
+        return; // успех — поделились нативным листом
+      } catch (e) {
+        // AbortError = пользователь сам закрыл лист → ничего не навязываем. Иная ошибка share →
+        // проваливаемся в копирование ссылки ниже (платформа с share, но он не сработал; аудит c-2 M-2).
+        if (e instanceof DOMException && e.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setShared(true);
+      clearTimeout(shareTimer.current);
+      shareTimer.current = setTimeout(() => setShared(false), 1500);
+    } catch {
+      // буфер недоступен — код виден на экране, можно поделиться вручную
+    }
+  };
   // Kick в два клика (без window.confirm): первый «вооружает» место, второй (в течение 3с) — выгоняет.
   const armKick = (seat: number) => {
     clearTimeout(confirmTimer.current);
@@ -70,6 +99,7 @@ export function LobbyScreen() {
   // Роль хозяина — из СВЕЖЕГО состава лобби (не из store-поля): наследование хозяина на сервере сразу
   // даёт верную роль здесь, и кнопка Start появляется у промотированного игрока (аудит a-2 #1).
   const amHost = mySeat != null && !!lobby.players[mySeat]?.isHost;
+  const filled = lobby.players.length;
 
   return (
     <Screen className="lobby">
@@ -83,11 +113,26 @@ export function LobbyScreen() {
           <p className="lobby__codelabel">Room code</p>
           <div className="lobby__codewrap">
             <span className="lobby__code data">{roomCode}</span>
-            <button type="button" className="lobby__copy" onClick={copy}>
+            <button
+              type="button"
+              className="lobby__copy"
+              onClick={copy}
+              aria-label="Copy room code"
+            >
               {copied ? 'Copied' : 'Copy'}
             </button>
+            <button
+              type="button"
+              className="lobby__copy"
+              onClick={share}
+              aria-label="Share invite link"
+            >
+              {shared ? 'Link copied' : 'Share link'}
+            </button>
           </div>
-          <p className="lobby__sub">Share this code so friends can join.</p>
+          <p className="lobby__sub" role="status" aria-live="polite">
+            {filled} of {lobby.capacity} players · share the code or link to invite more.
+          </p>
         </header>
 
         <ul className="seats" aria-label="Players in the room">

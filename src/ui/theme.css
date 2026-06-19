@@ -777,6 +777,7 @@ body {
 .lobby__codewrap {
   display: flex;
   align-items: center;
+  flex-wrap: wrap; /* код + Copy + Share переносятся на узком экране, а не переполняют строку */
   gap: var(--s-4);
 }
 .lobby__code {
