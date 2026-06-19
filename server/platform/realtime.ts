@@ -49,12 +49,21 @@ const JOIN_LOCK_MS = 30_000;
 const MAX_CREATE_PER_SOCKET = 20; // анти-спам создания комнат с одного соединения
 const MAX_MSG_BYTES = 4096; // лимит размера любого сокет-сообщения (анти-абьюз)
 
+/** Безопасный снимок для `/status` (2.P.2): ТОЛЬКО агрегаты — без кодов комнат и имён игроков. */
+export interface StatusSnapshot {
+  connections: number; // всего живых сокетов (включая ещё не севших в комнату)
+  rooms: number; // всего комнат в памяти
+  inLobby: number; // из них в лобби (партия не начата)
+  inGame: number; // из них с идущей партией
+  playersOnline: number; // игроков с живым сокетом, сидящих в комнатах
+}
+
 export function attachRealtime(
   httpServer: HttpServer,
   log: FastifyBaseLogger,
   clientOrigin: string | string[],
   module: YahtzeeModule,
-): Server {
+): { io: Server; getStatus: () => StatusSnapshot } {
   const io = new Server(httpServer, {
     cors: { origin: clientOrigin },
     maxHttpBufferSize: MAX_MSG_BYTES,
@@ -370,5 +379,21 @@ export function attachRealtime(
     });
   });
 
-  return io;
+  /**
+   * Снимок для мониторинга (2.P.2). Только числа — НИКОГДА не отдаём `room.id` (это КОД-пропуск в
+   * комнату) и `seat.name`. Синхронный проход по реестру (Node однопоточный — гонок нет).
+   */
+  function getStatus(): StatusSnapshot {
+    let inLobby = 0;
+    let inGame = 0;
+    let playersOnline = 0;
+    for (const room of rooms.values()) {
+      if (room.game === null) inLobby++;
+      else inGame++;
+      playersOnline += room.seats.filter((s) => s.socketId !== null).length;
+    }
+    return { connections, rooms: rooms.size, inLobby, inGame, playersOnline };
+  }
+
+  return { io, getStatus };
 }

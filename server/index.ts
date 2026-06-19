@@ -29,7 +29,10 @@ const app = Fastify({ logger: true });
 app.get('/health', async () => ({ status: 'ok' }));
 
 // Realtime поверх http-сервера fastify (2.0.c→2.1.b): рукопожатие + авторитетный игровой цикл.
-attachRealtime(app.server, app.log, CLIENT_ORIGIN, yahtzeeModule);
+const { getStatus } = attachRealtime(app.server, app.log, CLIENT_ORIGIN, yahtzeeModule);
+
+// Лёгкий мониторинг (2.P.2): только агрегаты — без кодов комнат и имён (код = пропуск в игру).
+app.get('/status', async () => getStatus());
 
 // Раздача собранного клиента same-origin (2.P.1): один адрес отдаёт и игру, и realtime — другу одна
 // ссылка. Регистрируем ТОЛЬКО если клиент собран: в dev его обычно нет (Vite на :5173), а
