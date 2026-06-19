@@ -749,6 +749,27 @@ body {
   letter-spacing: 0.22em;
   text-transform: uppercase;
 }
+/* Invite-вход (2.2.d-1): пришли по ссылке — код фокус экрана (крупнее, по центру); тихая ссылка на полную форму. */
+.online-code-input--hero {
+  font-size: 26px;
+  text-align: center;
+}
+.online-entry__alt {
+  align-self: center;
+  background: none;
+  border: none;
+  padding: var(--s-2);
+  font-family: var(--font-data);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.online-entry__alt:hover {
+  color: var(--ice);
+}
 
 /* ── Лобби (2.2.a-2 → дизайн a-3): герой — код-«позывной»; места «за столом» с pip-маркером ── */
 .lobby__inner {

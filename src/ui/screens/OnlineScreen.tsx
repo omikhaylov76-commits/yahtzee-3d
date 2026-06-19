@@ -36,7 +36,11 @@ export function OnlineScreen() {
   const mode = useGameStore((s) => s.mode);
   const status = useGameStore((s) => s.onlineStatus) ?? 'connecting';
   const [name, setName] = useState('');
-  const [code, setCode] = useState(() => roomCodeFromUrl() ?? ''); // предзаполнение из deep-link (2.2.c-2)
+  // Пришли по ссылке-приглашению `?room=CODE`? Захватываем код ОДИН раз (URL не меняется за жизнь экрана):
+  // по нему показываем УЗКИЙ экран join (2.2.d-1) вместо полной формы create/join. Поле кода — из него же.
+  const [invitedCode] = useState(() => roomCodeFromUrl());
+  const [code, setCode] = useState(() => invitedCode ?? '');
+  const [override, setOverride] = useState(false); // гость нажал «другой код / создать» → полная форма
 
   // Чистим имя тем же общим фильтром, что и сервер (shared/names); серверная очистка всё равно финальна.
   const cleanedName = () => normalizeName(name) || undefined;
@@ -82,6 +86,79 @@ export function OnlineScreen() {
               ← Back to menu
             </Button>
           </div>
+        </div>
+      </Screen>
+    );
+  }
+
+  // Пришли по приглашению (2.2.d-1): узкий экран «Join» — код подставлен, один тап. Полную форму
+  // (создать / другой код) гость открывает ссылкой «Use a different code…» (override). Блок статуса/ошибки
+  // выше — общий; «Try again» (goLocal) вернёт сюда же, т.к. код всё ещё в URL.
+  if (invitedCode != null && !override) {
+    return (
+      <Screen className="coming">
+        <div className="online-entry">
+          <button type="button" className="back-link" onClick={() => setView('menu')}>
+            ← Back to menu
+          </button>
+
+          <header className="coming__head online-entry__head">
+            <Eyebrow>Online · invite</Eyebrow>
+            <h1 className="display coming__title">Join the room</h1>
+            <p className="coming__sub">You&rsquo;ve been invited. Add your name and jump in.</p>
+          </header>
+
+          <div className="online-field">
+            <label className="field-label" htmlFor="online-name">
+              Your name <span className="field-opt">optional</span>
+            </label>
+            <input
+              id="online-name"
+              className="player-row__input"
+              type="text"
+              value={name}
+              maxLength={MAX_NAME_LEN}
+              placeholder="Player"
+              onChange={(e) => setName(e.target.value.slice(0, MAX_NAME_LEN))}
+            />
+          </div>
+
+          <div className="online-card">
+            <label className="field-label" htmlFor="online-code">
+              Room code
+            </label>
+            <input
+              id="online-code"
+              className="player-row__input online-code-input online-code-input--hero"
+              type="text"
+              value={code}
+              maxLength={CODE_LEN}
+              placeholder="K7Q9ZP"
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Room code"
+              onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, CODE_LEN))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  join();
+                }
+              }}
+            />
+            <Button
+              variant="primary"
+              className="online-entry__cta"
+              onClick={join}
+              disabled={!code.trim()}
+            >
+              Join room
+            </Button>
+          </div>
+
+          <button type="button" className="online-entry__alt" onClick={() => setOverride(true)}>
+            Use a different code or create a room
+          </button>
         </div>
       </Screen>
     );
