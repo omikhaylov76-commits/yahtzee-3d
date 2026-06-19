@@ -7,6 +7,7 @@ import { Celebration } from './ui/components/Celebration';
 import { LoadingScreen } from './ui/screens/LoadingScreen';
 import { MenuScreen } from './ui/screens/MenuScreen';
 import { OnlineScreen } from './ui/screens/OnlineScreen';
+import { LobbyScreen } from './ui/screens/LobbyScreen';
 import { StartScreen } from './ui/screens/StartScreen';
 import { GameScreen } from './ui/screens/GameScreen';
 import { WinnerScreen } from './ui/screens/WinnerScreen';
@@ -18,6 +19,8 @@ import { WinnerScreen } from './ui/screens/WinnerScreen';
  */
 export function App() {
   const state = useGameStore((s) => s.state);
+  const mode = useGameStore((s) => s.mode);
+  const lobby = useGameStore((s) => s.lobby);
   const view = useUiStore((s) => s.view);
   const events = useGameStore((s) => s.events);
   const muted = useGameStore((s) => s.muted);
@@ -59,6 +62,8 @@ export function App() {
     ) : (
       <GameScreen />
     )
+  ) : mode === 'online' && lobby ? (
+    <LobbyScreen />
   ) : view === 'localSetup' ? (
     <StartScreen />
   ) : view === 'online' ? (

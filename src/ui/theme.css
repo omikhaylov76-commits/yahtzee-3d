@@ -650,13 +650,134 @@ body {
 }
 .conn-status--mismatch,
 .conn-status--offline,
-.conn-status--full {
+.conn-status--full,
+.conn-status--notFound,
+.conn-status--alreadyStarted {
   color: var(--danger);
 }
 .conn-status--mismatch::before,
 .conn-status--offline::before,
-.conn-status--full::before {
+.conn-status--full::before,
+.conn-status--notFound::before,
+.conn-status--alreadyStarted::before {
   background: var(--danger);
+}
+
+/* Форма входа в онлайн (2.2.a-2): создать комнату / войти по коду. Полировка дизайна — a-3. */
+.online-entry {
+  margin: auto;
+  width: min(460px, 100%);
+  padding: var(--s-12) var(--s-6) var(--s-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+}
+.online-entry .coming__head {
+  align-items: flex-start;
+  text-align: left;
+}
+.field-opt {
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.online-entry__cta {
+  width: 100%;
+}
+.online-entry__or {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  color: var(--text-dim);
+  font-family: var(--font-data);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.online-entry__or::before,
+.online-entry__or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(237, 255, 254, 0.12);
+}
+.online-join {
+  display: flex;
+  gap: var(--s-3);
+}
+.online-code-input {
+  flex: 1;
+  font-family: var(--font-data);
+  font-size: 20px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* Лобби онлайн-комнаты (2.2.a-2). */
+.lobby__inner {
+  margin: auto;
+  width: min(460px, 100%);
+  padding: var(--s-12) var(--s-6) var(--s-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+}
+.lobby__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  align-items: center;
+  text-align: center;
+}
+.lobby__title {
+  margin: 0;
+  font-size: clamp(18px, 4vw, 24px);
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+.lobby__code {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: clamp(40px, 11vw, 64px);
+  letter-spacing: 0.28em;
+  color: var(--ice);
+  text-shadow: 0 0 28px rgba(203, 255, 252, 0.2);
+  padding-left: 0.28em; /* компенсировать трекинг последнего символа для центровки */
+}
+.lobby__sub {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.lobby__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.lobby__badge {
+  font-family: var(--font-data);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(237, 255, 254, 0.2);
+  color: var(--text-dim);
+}
+.lobby__badge--you {
+  border-color: var(--teal-dot);
+  color: var(--ice);
+}
+.lobby__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  align-items: center;
+}
+.lobby__hint {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
 }
 
 /* ───────── Игровой экран (F3.3) ───────── */

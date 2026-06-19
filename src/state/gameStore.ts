@@ -9,7 +9,14 @@ import type { Category, DomainEvent, GameState } from '../core';
 import type { Transport } from '../transport/Transport';
 import { LocalTransport } from '../transport/LocalTransport';
 import { LocalStorageGameStorage } from '../storage/localStorageGameStorage';
-import { createOnlineSession, type OnlineSession, type OnlineStatus } from '../platform/net';
+import {
+  createOnlineSession,
+  type OnlineCallbacks,
+  type OnlineSession,
+  type OnlineStatus,
+} from '../platform/net';
+import type { OnlineIntent } from '../transport/NetworkTransport';
+import type { LobbyPayload } from '../../shared/protocol';
 
 export interface GameStoreState {
   /** Текущее состояние партии (null — игра не начата). */
@@ -61,8 +68,18 @@ export interface GameStoreState {
    * UI блокирует контролы (анти-двойной Roll/Score). Всегда false в local-режиме (2.1.d-3).
    */
   pending: boolean;
-  /** Войти в онлайн: подменить активный транспорт сетевым (локальная партия/автосейв целы). */
-  goOnline: () => void;
+  /** Состав комнаты ДО старта (2.2.a-2): пока не null и партии нет — роутер показывает лобби. */
+  lobby: LobbyPayload | null;
+  /** Моё место в комнате (из `joined`); по нему помечаем «you» в лобби. null вне онлайна. */
+  mySeat: number | null;
+  /** Я ли хозяин комнаты (создатель): только хозяин видит активную кнопку Start. */
+  isHost: boolean;
+  /** Код текущей онлайн-комнаты (для шаринга в лобби); null вне онлайна. */
+  roomCode: string | null;
+  /** Войти в онлайн по намерению (создать комнату / войти по коду): подменить транспорт сетевым. */
+  goOnline: (intent: OnlineIntent) => void;
+  /** Хозяин запускает партию из лобби (сервер проверяет роль и ≥2 игроков). */
+  startGameOnline: () => void;
   /** Выйти из онлайна: отключить сетевой транспорт, вернуться на сохранённый локальный. */
   goLocal: () => void;
 }
@@ -123,7 +140,8 @@ function saveSound(s: SoundSettings): void {
 export function createGameStore(
   localTransport: Transport,
   makeOnlineSession: (
-    onStatus: (status: OnlineStatus) => void,
+    intent: OnlineIntent,
+    cb: OnlineCallbacks,
   ) => OnlineSession = createOnlineSession,
 ): StoreApi<GameStoreState> {
   const sound = loadSound();
@@ -184,11 +202,35 @@ export function createGameStore(
     onlineStatus: null,
     myPlayerId: null,
     pending: false,
-    goOnline: () => {
+    lobby: null,
+    mySeat: null,
+    isHost: false,
+    roomCode: null,
+    goOnline: (intent) => {
       if (get().mode === 'online') return; // уже онлайн — повторный заход игнорируем
-      session = makeOnlineSession((onlineStatus) => store.setState({ onlineStatus }));
+      session = makeOnlineSession(intent, {
+        onStatus: (onlineStatus) => store.setState({ onlineStatus }),
+        onLobby: (lobby) => store.setState({ lobby }),
+        onJoined: (j) =>
+          store.setState({
+            myPlayerId: j.playerId,
+            mySeat: j.seat,
+            isHost: j.isHost,
+            roomCode: j.roomId,
+          }),
+      });
       switchTo(session.transport);
-      set({ mode: 'online', onlineStatus: 'connecting' });
+      set({
+        mode: 'online',
+        onlineStatus: 'connecting',
+        lobby: null,
+        mySeat: null,
+        isHost: false,
+        roomCode: null,
+      });
+    },
+    startGameOnline: () => {
+      session?.start();
     },
     goLocal: () => {
       if (get().mode === 'local') return;
@@ -200,7 +242,14 @@ export function createGameStore(
       // `getState()` здесь вернёт null, и «выход из онлайна» приведёт в меню, а не воскресит чужую
       // локальную партию. (Если инвариант когда-то ослабнет — пересмотреть этот путь.)
       switchTo(localTransport);
-      set({ mode: 'local', onlineStatus: null });
+      set({
+        mode: 'local',
+        onlineStatus: null,
+        lobby: null,
+        mySeat: null,
+        isHost: false,
+        roomCode: null,
+      });
     },
   }));
 

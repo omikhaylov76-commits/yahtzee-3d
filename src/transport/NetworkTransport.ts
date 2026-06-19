@@ -27,7 +27,13 @@ export interface TransportSocket {
   disconnect(): void;
 }
 
-const DEFAULT_ROOM = 'dev'; // 2.1: общая комната; коды/лобби — 2.2.
+/**
+ * Намерение входа в онлайн (2.2.a-2): создать новую комнату (код выдаст сервер) или войти в
+ * существующую по коду. Имя — опционально (сервер чистит его `cleanName`; полная валидация — 2.2.b).
+ */
+export type OnlineIntent =
+  | { type: 'create'; name?: string }
+  | { type: 'join'; code: string; name?: string };
 
 /** `Action` ядра -> сетевое действие. `ROLL` без значений (их даёт сервер из CSPRNG, ADR-0012). */
 function toNetworkAction(action: Action): NetworkAction | null {
@@ -49,37 +55,57 @@ export class NetworkTransport implements Transport {
   /** `actionId` действия «в полёте» (ADR-0013): пока не null — новые действия игнорируются. */
   private pendingActionId: string | null = null;
   private playerId: string | null = null;
+  /** Код комнаты: для `join` известен сразу, для `create` узнаём из `joined`. Нужен для reclaim. */
+  private code: string | null;
   /** После `reset()` — true: входящие сокет-события игнорируются (нет `off`, чтобы не воскресить). */
   private disposed = false;
   private readonly listeners = new Set<TransportListener>();
 
   constructor(
     private readonly socket: TransportSocket,
-    private readonly roomId: string = DEFAULT_ROOM,
+    private readonly intent: OnlineIntent,
     private readonly makeActionId: () => string = () => crypto.randomUUID(),
   ) {
+    this.code = intent.type === 'join' ? intent.code : null;
     socket.on(MSG.state, (p) => this.onState(p as StatePayload));
     socket.on(MSG.denied, (p) => this.onDenied(p as DeniedPayload));
     socket.on(MSG.joined, (p) => {
-      this.playerId = (p as JoinedPayload).playerId;
+      const j = p as JoinedPayload;
+      this.playerId = j.playerId;
+      this.code = j.roomId; // для create узнаём выданный код; для join — подтверждаем нормализованный
     });
     // Вход в комнату — на КАЖДЫЙ (ре)коннект сокета (2.1.e-2). socket.io сам переподключается после
-    // блипа сети; первый раз входим в свежее место, на реконнекте называем свой playerId, чтобы
-    // сервер вернул в то же место (reclaim), а не отбил room:full.
-    socket.on('connect', () => this.join());
-    // room:full / room:not-found — продуктовые состояния (2.2.d); здесь игнорируем.
+    // блипа сети; первый раз создаём/входим по intent, на реконнекте называем playerId+код (reclaim).
+    socket.on('connect', () => this.enter());
+    // room:full / not-found / already-started — статусы сессии (net.ts/2.2.a-3); здесь игнорируем.
   }
 
-  /** (Пере)войти в комнату. На реконнекте несём playerId (reclaim) и сбрасываем застрявший pending. */
-  private join(): void {
+  /**
+   * (Пере)войти на (ре)коннект сокета. Реклейм (playerId+код уже есть) → join с ними. Первый вход —
+   * по intent: create (код выдаст сервер) или join по коду. Сбрасываем застрявший pending: авторитетный
+   * re-snapshot его разрулит (долетело — придёт версией выше и снимет; потеряно — даём повторить).
+   */
+  private enter(): void {
     if (this.disposed) return; // после reset сессию не воскрешаем
-    // In-flight действие на момент разрыва: авторитетный re-snapshot его разрулит (долетело — придёт
-    // версией выше и снимет pending; потеряно — даём повторить). Иначе контролы залипли бы по pending.
     this.pendingActionId = null;
-    this.socket.emit(
-      MSG.join,
-      this.playerId ? { roomId: this.roomId, playerId: this.playerId } : { roomId: this.roomId },
-    );
+    if (this.playerId && this.code) {
+      // Реклейм: идущую партию сервер вернёт по playerId (имя там уже сохранено). Но реконнект в ЛОББИ
+      // место не держит (fresh-join) — поэтому имя пробрасываем тоже, иначе оно сбросится на «Player N».
+      const { name } = this.intent;
+      this.socket.emit(
+        MSG.join,
+        name
+          ? { roomId: this.code, playerId: this.playerId, name }
+          : { roomId: this.code, playerId: this.playerId },
+      );
+      return;
+    }
+    if (this.intent.type === 'create') {
+      this.socket.emit(MSG.create, this.intent.name ? { name: this.intent.name } : {});
+    } else {
+      const { code, name } = this.intent;
+      this.socket.emit(MSG.join, name ? { roomId: code, name } : { roomId: code });
+    }
   }
 
   getState(): GameState | null {

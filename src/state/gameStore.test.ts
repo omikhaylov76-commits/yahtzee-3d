@@ -4,7 +4,8 @@ import { LocalTransport } from '../transport/LocalTransport';
 import { MemoryGameStorage } from '../storage/memoryGameStorage';
 import type { Transport, TransportListener } from '../transport/Transport';
 import type { Action, DomainEvent, GameState } from '../core';
-import type { OnlineSession } from '../platform/net';
+import type { OnlineCallbacks, OnlineSession } from '../platform/net';
+import type { OnlineIntent } from '../transport/NetworkTransport';
 
 const players = [{ name: 'A' }, { name: 'B' }];
 
@@ -117,18 +118,19 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
     const local = new LocalTransport(storage, () => 1);
     const net = new FakeNetTransport();
     const dispose = vi.fn();
-    let statusCb: ((s: import('../platform/net').OnlineStatus) => void) | null = null;
-    const make = (onStatus: (s: import('../platform/net').OnlineStatus) => void): OnlineSession => {
-      statusCb = onStatus;
-      return { transport: net, dispose };
+    const start = vi.fn();
+    let cb: OnlineCallbacks | null = null;
+    const make = (_intent: OnlineIntent, callbacks: OnlineCallbacks): OnlineSession => {
+      cb = callbacks;
+      return { transport: net, dispose, start };
     };
     const store = createGameStore(local, make);
-    return { store, net, dispose, status: () => statusCb };
+    return { store, net, dispose, start, status: () => cb?.onStatus ?? null, cb: () => cb };
   }
 
   it('goOnline переключает режим и зеркалит сетевое состояние, а не локальное', () => {
     const { store, net } = onlineStore();
-    store.getState().goOnline();
+    store.getState().goOnline({ type: 'create' });
     expect(store.getState().mode).toBe('online');
     expect(store.getState().onlineStatus).toBe('connecting');
     expect(store.getState().state).toBeNull(); // сетевая партия ещё не пришла
@@ -146,7 +148,7 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
 
   it('статус сессии из фабрики попадает в стор', () => {
     const { store, status } = onlineStore();
-    store.getState().goOnline();
+    store.getState().goOnline({ type: 'create' });
     status()?.('waiting');
     expect(store.getState().onlineStatus).toBe('waiting');
     status()?.('playing');
@@ -160,7 +162,7 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
     const localState = store.getState().state;
     expect(localState?.phase).toBe('playing');
 
-    store.getState().goOnline();
+    store.getState().goOnline({ type: 'create' });
     net.push({ phase: 'playing' } as unknown as GameState); // в онлайне своё состояние
     expect(store.getState().state).not.toBe(localState);
 
@@ -179,7 +181,7 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
 
   it('reset() в онлайне выходит в локальный режим, не залипая (фикс C1)', () => {
     const { store, net, dispose } = onlineStore();
-    store.getState().goOnline();
+    store.getState().goOnline({ type: 'create' });
     net.push({ phase: 'over' } as unknown as GameState); // онлайн-партия закончилась
     expect(store.getState().mode).toBe('online');
 
@@ -191,17 +193,42 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
     expect(store.getState().state).toBeNull(); // локальной партии не было — пусто, как и ждёт меню
 
     // mode не залип: повторный заход в онлайн снова создаёт сессию.
-    store.getState().goOnline();
+    store.getState().goOnline({ type: 'create' });
     expect(store.getState().mode).toBe('online');
   });
 
   it('повторный goOnline/goLocal идемпотентен (нет двойной сессии)', () => {
     const { store, dispose } = onlineStore();
-    store.getState().goOnline();
-    store.getState().goOnline(); // уже online — no-op
+    store.getState().goOnline({ type: 'create' });
+    store.getState().goOnline({ type: 'create' }); // уже online — no-op
     store.getState().goLocal();
     store.getState().goLocal(); // уже local — no-op
     expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('лобби/посадка зеркалятся в стор; startGameOnline зовёт session.start; goLocal чистит', () => {
+    const { store, start, cb } = onlineStore();
+    store.getState().goOnline({ type: 'create' });
+    cb()?.onJoined({ roomId: 'K7Q9ZP', playerId: 'seat-1', seat: 0, isHost: true });
+    cb()?.onLobby({
+      roomId: 'K7Q9ZP',
+      players: [{ seat: 0, name: 'Alice', isHost: true }],
+      capacity: 4,
+      canStart: false,
+    });
+    expect(store.getState().roomCode).toBe('K7Q9ZP');
+    expect(store.getState().isHost).toBe(true);
+    expect(store.getState().mySeat).toBe(0);
+    expect(store.getState().lobby?.players).toHaveLength(1);
+
+    store.getState().startGameOnline();
+    expect(start).toHaveBeenCalledTimes(1);
+
+    store.getState().goLocal();
+    expect(store.getState().lobby).toBeNull();
+    expect(store.getState().isHost).toBe(false);
+    expect(store.getState().roomCode).toBeNull();
+    expect(store.getState().mySeat).toBeNull();
   });
 });
 
@@ -210,19 +237,19 @@ describe('gameStore — сетевой гейтинг ввода (2.1.d-3)', () 
     const storage = new MemoryGameStorage();
     const local = new LocalTransport(storage, () => 1);
     const net = new FakeNetTransport();
-    let statusCb: ((s: import('../platform/net').OnlineStatus) => void) | null = null;
-    const make = (onStatus: (s: import('../platform/net').OnlineStatus) => void): OnlineSession => {
-      statusCb = onStatus;
-      return { transport: net, dispose: vi.fn() };
+    let cb: OnlineCallbacks | null = null;
+    const make = (_intent: OnlineIntent, callbacks: OnlineCallbacks): OnlineSession => {
+      cb = callbacks;
+      return { transport: net, dispose: vi.fn(), start: vi.fn() };
     };
     const store = createGameStore(local, make);
-    return { store, net, status: () => statusCb };
+    return { store, net, status: () => cb?.onStatus ?? null, cb: () => cb };
   }
 
   /** Войти в онлайн как игрок `me`, получить «играбельное» состояние с ходом `currentId`. */
   function enterOnline(me: 'A' | 'B', currentId: 'A' | 'B') {
     const ctx = onlineStore();
-    ctx.store.getState().goOnline();
+    ctx.store.getState().goOnline({ type: 'create' });
     ctx.net.playerId = me;
     ctx.status()?.('playing');
     ctx.net.push(netState(currentId));
@@ -262,7 +289,7 @@ describe('gameStore — сетевой гейтинг ввода (2.1.d-3)', () 
 
   it('myPlayerId ещё неизвестен (null) при playing: заблокирован, но баннер не врёт «чужой ход»', () => {
     const ctx = onlineStore();
-    ctx.store.getState().goOnline();
+    ctx.store.getState().goOnline({ type: 'create' });
     ctx.status()?.('playing');
     ctx.net.push(netState('A')); // состояние пришло, но joined ещё не выдал нам playerId
     expect(ctx.store.getState().myPlayerId).toBeNull();

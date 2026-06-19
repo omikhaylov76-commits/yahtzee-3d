@@ -49,16 +49,31 @@ function seqIds() {
 }
 
 describe('NetworkTransport — вход и состояние', () => {
-  it('входит в комнату при connect (room:join без playerId на первом входе)', () => {
+  it('join-intent входит по коду при connect (room:join без playerId на первом входе)', () => {
     const s = new FakeSocket();
-    new NetworkTransport(s, 'dev', seqIds());
+    new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     s.server('connect', undefined); // socket.io шлёт вход на (ре)коннект, не в конструкторе
     expect(s.sent[0]).toEqual({ event: MSG.join, payload: { roomId: 'dev' } });
   });
 
+  it('create-intent шлёт room:create, затем реконнект reclaim-ит по выданному коду', () => {
+    const s = new FakeSocket();
+    const t = new NetworkTransport(s, { type: 'create', name: 'Alice' }, seqIds());
+    s.server('connect', undefined);
+    expect(s.sent[0]).toEqual({ event: MSG.create, payload: { name: 'Alice' } });
+
+    // Сервер выдал код в joined -> реконнект входит уже по этому коду с playerId (reclaim).
+    s.server(MSG.joined, { roomId: 'K7Q9ZP', playerId: 'seat-xyz', seat: 0, isHost: true });
+    s.server('connect', undefined);
+    expect(s.sent.filter((m) => m.event === MSG.join).map((m) => m.payload)).toEqual([
+      { roomId: 'K7Q9ZP', playerId: 'seat-xyz', name: 'Alice' }, // имя пробрасывается в reclaim-join
+    ]);
+    expect(t.getPlayerId()).toBe('seat-xyz');
+  });
+
   it('реконнект пере-входит в то же место с playerId (reclaim)', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     s.server('connect', undefined); // первый вход — без playerId
     s.server(MSG.joined, { roomId: 'dev', playerId: 'seat-abc', seat: 0 });
     s.server('connect', undefined); // реконнект — несём playerId для reclaim
@@ -71,7 +86,7 @@ describe('NetworkTransport — вход и состояние', () => {
 
   it('реконнект сбрасывает застрявшее in-flight действие (pending)', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     s.server('connect', undefined);
     t.dispatch({ type: 'ROLL' }); // pending встал, ответа сервера нет (разрыв до прихода state)
     expect(t.getPending()).toBe(true);
@@ -84,7 +99,7 @@ describe('NetworkTransport — вход и состояние', () => {
 
   it('применяет более новую версию и уведомляет подписчиков', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     const got: { state: GameState | null; events: DomainEvent[] }[] = [];
     t.subscribe((state, events) => got.push({ state, events }));
 
@@ -97,7 +112,7 @@ describe('NetworkTransport — вход и состояние', () => {
 
   it('игнорирует устаревшую/равную версию', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     const got: DomainEvent[][] = [];
     t.subscribe((_state, events) => got.push(events));
 
@@ -112,7 +127,7 @@ describe('NetworkTransport — вход и состояние', () => {
 describe('NetworkTransport — pending-гейт и маппинг', () => {
   it('ROLL уходит без values; второй dispatch гейтится до прихода состояния', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
 
     t.dispatch({ type: 'ROLL' });
     t.dispatch({ type: 'ROLL' }); // pending — игнор
@@ -129,7 +144,7 @@ describe('NetworkTransport — pending-гейт и маппинг', () => {
 
   it('TOGGLE_HOLD и SCORE мапятся в сетевое действие', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
 
     t.dispatch({ type: 'TOGGLE_HOLD', index: 2 });
     s.server(MSG.state, snapshot(1));
@@ -145,7 +160,7 @@ describe('NetworkTransport — pending-гейт и маппинг', () => {
 
   it('dispatch(NEW_GAME) игнорируется (партию создаёт сервер)', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     t.dispatch({ type: 'NEW_GAME', players: [{ name: 'A' }] });
     expect(s.sent.filter((m) => m.event === MSG.action)).toHaveLength(0);
   });
@@ -154,7 +169,7 @@ describe('NetworkTransport — pending-гейт и маппинг', () => {
 describe('NetworkTransport — denied и reset', () => {
   it('denied на наш actionId снимает pending и эмитит action:denied', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     const got: DomainEvent[][] = [];
     t.subscribe((_state, events) => got.push(events));
 
@@ -169,7 +184,7 @@ describe('NetworkTransport — denied и reset', () => {
 
   it('denied без in-flight действия не эмитит (анти-двойной отказ)', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     const got: DomainEvent[][] = [];
     t.subscribe((_state, events) => got.push(events));
 
@@ -179,7 +194,7 @@ describe('NetworkTransport — denied и reset', () => {
 
   it('после reset() пришедший connect не шлёт room:join (анти-воскрешение)', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     s.server('connect', undefined); // первый вход
     const joinsBefore = s.sent.filter((m) => m.event === MSG.join).length;
     t.reset();
@@ -190,7 +205,7 @@ describe('NetworkTransport — denied и reset', () => {
 
   it('после reset поздний state с сокета игнорируется (не воскрешает партию)', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     s.server(MSG.state, snapshot(1));
     const got: (GameState | null)[] = [];
     t.subscribe((state) => got.push(state));
@@ -204,7 +219,7 @@ describe('NetworkTransport — denied и reset', () => {
 
   it('reset отключает сокет, обнуляет состояние и уведомляет (null, [])', () => {
     const s = new FakeSocket();
-    const t = new NetworkTransport(s, 'dev', seqIds());
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     s.server(MSG.state, snapshot(1));
     const got: { state: GameState | null; events: DomainEvent[] }[] = [];
     t.subscribe((state, events) => got.push({ state, events }));
