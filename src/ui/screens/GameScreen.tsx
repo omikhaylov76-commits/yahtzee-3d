@@ -9,6 +9,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary';
 import { hasWebGL } from '../capabilities';
 import { totalsFor } from '../scoreView';
 import { useGameStore } from '../../state/gameStore';
+import { useUiStore } from '../../state/uiStore';
 
 // F6.4: 3D-арена (Three.js + Rapier WASM, ~3 МБ) грузится ЛЕНИВО отдельным чанком — только
 // когда есть WebGL и экран игры реально показан. 2D-fallback и стартовый экран её не тянут.
@@ -40,6 +41,34 @@ export function GameScreen() {
   const roll = useGameStore((s) => s.roll);
   const toggleHold = useGameStore((s) => s.toggleHold);
   const nudge = useGameStore((s) => s.nudge);
+  const reset = useGameStore((s) => s.reset);
+  const mode = useGameStore((s) => s.mode);
+  const setView = useUiStore((s) => s.setView);
+
+  // Выход в меню из НЕЗАВЕРШЁННОЙ партии (2.1.d-2): двухшаговое подтверждение, чтобы случайно не
+  // потерять hotseat-игру. Выход идёт через mode-aware reset() (online = покинуть комнату, local =
+  // стереть партию) + переход в меню. Esc отменяет подтверждение.
+  const [confirming, setConfirming] = useState(false);
+  const exitBtnRef = useRef<HTMLButtonElement>(null);
+  const wasConfirming = useRef(false);
+  useEffect(() => {
+    if (!confirming) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setConfirming(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirming]);
+  // a11y: при отмене подтверждения (Esc/Cancel) вернуть фокус на «← Menu», чтобы клавиатура не
+  // теряла позицию. Срабатывает только на переходе confirming→false (не на маунте экрана).
+  useEffect(() => {
+    if (wasConfirming.current && !confirming) exitBtnRef.current?.focus();
+    wasConfirming.current = confirming;
+  }, [confirming]);
+  const leaveToMenu = () => {
+    reset();
+    setView('menu');
+  };
 
   // 3D-арена при наличии WebGL. 2D-кости — fallback ТОЛЬКО когда WebGL недоступен (F4.5).
   // reduced-motion больше не загоняет в 2D (3D — ядро впечатления); деликатный «reduced 3D»
@@ -77,6 +106,37 @@ export function GameScreen() {
     <Screen className="game">
       <div className="game__layout">
         <section className="arena">
+          {confirming ? (
+            <div className="game-exit game-exit--confirm" role="group" aria-label="Leave game">
+              <span className="game-exit__msg">
+                {mode === 'online'
+                  ? 'Leave the online game?'
+                  : 'Leave game? Your current game will be lost.'}
+              </span>
+              <button type="button" className="game-exit__btn is-danger" onClick={leaveToMenu}>
+                Leave
+              </button>
+              <button
+                type="button"
+                className="game-exit__btn"
+                onClick={() => setConfirming(false)}
+                autoFocus
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              ref={exitBtnRef}
+              type="button"
+              className="back-link game-exit__open"
+              onClick={() => setConfirming(true)}
+              aria-label="Leave game and return to menu"
+            >
+              ← Menu
+            </button>
+          )}
+
           <header className="turn">
             <Eyebrow>In play</Eyebrow>
             <h2 className="display turn__name">{current.name}</h2>

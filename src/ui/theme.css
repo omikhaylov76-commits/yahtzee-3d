@@ -557,6 +557,43 @@ body {
   color: var(--ice);
 }
 
+/* Выход в меню из партии (2.1.d-2): ссылка «← Menu» + inline-подтверждение. */
+.game-exit__open {
+  margin-bottom: var(--s-2);
+}
+.game-exit--confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-bottom: var(--s-2);
+}
+.game-exit__msg {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.game-exit__btn {
+  background: none;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 4px 12px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+.game-exit__btn:hover {
+  border-color: rgba(237, 255, 254, 0.5);
+  color: var(--ice);
+}
+.game-exit__btn.is-danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 /* Заглушка онлайна (coming soon) */
 .coming__inner {
   margin: auto;

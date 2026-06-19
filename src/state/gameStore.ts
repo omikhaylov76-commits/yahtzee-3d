@@ -157,7 +157,12 @@ export function createGameStore(
       if (get().mode === 'local') return;
       session?.dispose(); // отключить сокет + обнулить сетевой транспорт (2.1.c reset)
       session = null;
-      switchTo(localTransport); // вернуться на сохранённую локальную партию (state её, не сетевой)
+      // Возврат на локальный транспорт. ИНВАРИАНТ (важно для «выхода в меню», 2.1.d-2): онлайн
+      // достижим ТОЛЬКО из меню, а меню роутер показывает лишь при `state===null` (App.tsx:
+      // `state ? Game : view`). Значит пока мы онлайн, `localTransport` гарантированно пуст —
+      // `getState()` здесь вернёт null, и «выход из онлайна» приведёт в меню, а не воскресит чужую
+      // локальную партию. (Если инвариант когда-то ослабнет — пересмотреть этот путь.)
+      switchTo(localTransport);
       set({ mode: 'local', onlineStatus: null });
     },
   }));
