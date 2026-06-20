@@ -4,7 +4,12 @@ import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
 import { NicknameForm } from '../components/NicknameForm';
 import { useUiStore } from '../../state/uiStore';
-import { fetchPlayerStats, useAuthStore, type PlayerStats } from '../../state/authStore';
+import {
+  fetchPlayerStats,
+  useAuthStore,
+  type DeleteError,
+  type PlayerStats,
+} from '../../state/authStore';
 import { soloRecordStorage } from '../../storage/soloRecordStorage';
 
 /** Инициалы для запасного аватара, когда нет картинки из Google. */
@@ -12,6 +17,13 @@ function initials(name: string): string {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((p) => [...p][0]?.toUpperCase() ?? '').join('') || '?';
 }
+
+/** Тексты ошибок удаления аккаунта (2.3.e-6b). */
+const DELETE_ERROR_TEXT: Record<DeleteError, string> = {
+  in_game: 'Finish your current game first.',
+  auth: 'Your session expired. Sign in again.',
+  net: 'Network error. Try again.',
+};
 
 /**
  * Кабинет игрока (2.3.e-5): профиль (аватар + ник + Google-имя), статистика (онлайн из `/auth/stats` +
@@ -42,6 +54,25 @@ export function CabinetScreen() {
       alive = false;
     };
   }, []);
+
+  // Удаление аккаунта (2.3.e-6b): подтверждение словом «DELETE» → разлогин → меню. Хуки — до guard.
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
+  const [delBusy, setDelBusy] = useState(false);
+  const [delError, setDelError] = useState<DeleteError | null>(null);
+  const doDelete = async () => {
+    if (confirmText !== 'DELETE' || delBusy) return;
+    setDelBusy(true);
+    setDelError(null);
+    const res = await deleteAccount();
+    if (res.ok) {
+      setView('menu'); // удалён + разлогинен → в меню (как гость)
+      return;
+    }
+    setDelError(res.reason);
+    setDelBusy(false);
+  };
 
   // Без сессии в кабинете делать нечего (роутер сюда обычно не пускает) — даём уйти в меню.
   if (!user) {
@@ -134,6 +165,63 @@ export function CabinetScreen() {
         <Button variant="ghost" className="cabinet__signout" onClick={() => void logout()}>
           Sign out
         </Button>
+
+        <section className="cabinet__section cabinet__danger">
+          <h2 className="cabinet__section-title">Danger zone</h2>
+          {!confirming ? (
+            <Button
+              variant="ghost"
+              className="cabinet__delete-go"
+              onClick={() => setConfirming(true)}
+            >
+              Delete account
+            </Button>
+          ) : (
+            <div className="cabinet__danger-confirm">
+              <p className="cabinet__muted">
+                This permanently deletes your account and frees your nickname. Past games show as
+                &ldquo;Deleted player&rdquo;. This can&rsquo;t be undone — type <b>DELETE</b> to
+                confirm.
+              </p>
+              <input
+                className="player-row__input"
+                type="text"
+                value={confirmText}
+                placeholder="DELETE"
+                autoComplete="off"
+                aria-label="Type DELETE to confirm account deletion"
+                onChange={(e) => {
+                  setConfirmText(e.target.value);
+                  if (delError) setDelError(null);
+                }}
+              />
+              {delError && (
+                <p className="field-error" role="alert">
+                  {DELETE_ERROR_TEXT[delError]}
+                </p>
+              )}
+              <div className="cabinet__danger-actions">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setConfirming(false);
+                    setConfirmText('');
+                    setDelError(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="cabinet__delete-go"
+                  disabled={confirmText !== 'DELETE' || delBusy}
+                  onClick={() => void doDelete()}
+                >
+                  {delBusy ? 'Deleting…' : 'Permanently delete'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </section>
       </div>
     </Screen>
   );

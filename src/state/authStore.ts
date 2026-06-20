@@ -15,6 +15,9 @@ export interface AuthUser {
 /** Причина отказа смены ника (2.3.e-3) — для текста в UI. */
 export type NickError = 'invalid' | 'reserved' | 'taken' | 'rate' | 'auth' | 'net';
 
+/** Причина отказа удаления аккаунта (2.3.e-6) — для текста в UI. */
+export type DeleteError = 'in_game' | 'auth' | 'net';
+
 /** Личная статистика игрока (2.3.e-5b) — форма ответа `/auth/stats` (зеркало серверного PlayerStats). */
 export interface PlayerStats {
   gamesPlayed: number;
@@ -29,6 +32,8 @@ interface AuthState {
   fetchMe: () => Promise<void>;
   /** Задать/сменить игровой ник (2.3.e-3). Истина — сервер: вернёт reason при invalid/reserved/taken. */
   setNickname: (raw: string) => Promise<{ ok: true } | { ok: false; reason: NickError }>;
+  /** Удалить аккаунт (2.3.e-6) — НЕОБРАТИМО. На успех: локальный разлогин (сессия отозвана сервером). */
+  deleteAccount: () => Promise<{ ok: true } | { ok: false; reason: DeleteError }>;
   logout: () => Promise<void>;
 }
 
@@ -65,6 +70,23 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (r.status === 401) return { ok: false, reason: 'auth' };
       const d = (await r.json().catch(() => ({}))) as { error?: string };
       return { ok: false, reason: d.error === 'reserved' ? 'reserved' : 'invalid' };
+    } catch {
+      return { ok: false, reason: 'net' };
+    }
+  },
+  deleteAccount: async () => {
+    try {
+      const r = await fetch(`${AUTH_BASE}/auth/account`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (r.ok) {
+        set({ user: null }); // аккаунт удалён + сессия отозвана → локальный разлогин
+        return { ok: true };
+      }
+      if (r.status === 409) return { ok: false, reason: 'in_game' };
+      if (r.status === 401) return { ok: false, reason: 'auth' };
+      return { ok: false, reason: 'net' };
     } catch {
       return { ok: false, reason: 'net' };
     }

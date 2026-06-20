@@ -681,6 +681,30 @@ body {
   font-size: 22px;
   color: var(--heading);
 }
+/* Danger zone кабинета (2.3.e-6b): удаление аккаунта — сдержанно-предупреждающе. */
+.cabinet__danger {
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+.cabinet__danger-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cabinet__danger-actions {
+  display: flex;
+  gap: 10px;
+}
+.cabinet__delete-go {
+  align-self: flex-start;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.cabinet__delete-go:not(:disabled):hover {
+  background: var(--danger);
+  color: #10211f;
+}
 
 /* Кнопка «назад в меню» (setup/онлайн → меню) */
 .back-link {
