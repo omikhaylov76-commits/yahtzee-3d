@@ -8,6 +8,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyCookie from '@fastify/cookie';
 import { PROTOCOL_VERSION } from '../shared/protocol';
 import { yahtzeeModule } from './games/yahtzee';
 import { attachRealtime } from './platform/realtime';
@@ -25,6 +26,7 @@ const CLIENT_ORIGIN = (process.env.CLIENT_ORIGIN ?? 'http://localhost:5173')
 const clientDist = fileURLToPath(new URL('../dist', import.meta.url));
 
 const app = Fastify({ logger: true });
+app.register(fastifyCookie); // cookie сессии входа (2.3.c)
 
 app.get('/health', async () => ({ status: 'ok' }));
 

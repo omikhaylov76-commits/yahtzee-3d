@@ -1,9 +1,8 @@
 /**
- * Аккаунты платформы (2.3.b): найти игрока по внешней привязке или создать нового. Привязка уникальна
- * по (provider, externalId) — повторный вход того же Google-аккаунта возвращает существующего user.
- * Новый игрок: user + первая привязка создаются в ОДНОЙ транзакции (без «осиротевших» строк).
+ * Аккаунты платформы (2.3.b/c): найти по внешней привязке или создать; получить по id для сессии.
+ * Привязка уникальна по (provider, externalId). Новый игрок: user + первая привязка в одной транзакции.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db, schema } from '../db';
 import type { AuthUserInfo } from './AuthProvider';
 
@@ -11,12 +10,14 @@ export interface PlatformUser {
   id: string;
   displayName: string;
   avatarUrl: string | null;
+  tokenVersion: number;
 }
 
 const userCols = {
   id: schema.users.id,
   displayName: schema.users.displayName,
   avatarUrl: schema.users.avatarUrl,
+  tokenVersion: schema.users.tokenVersion,
 };
 
 export async function findOrCreateUser(info: AuthUserInfo): Promise<PlatformUser> {
@@ -52,4 +53,14 @@ export async function findOrCreateUser(info: AuthUserInfo): Promise<PlatformUser
       .values({ userId: user.id, provider: info.provider, externalId: info.externalId });
     return user;
   });
+}
+
+/** Получить активного (не удалённого) пользователя по id — для проверки сессии (`/auth/me`). */
+export async function getUserById(id: string): Promise<PlatformUser | null> {
+  const [user] = await db
+    .select(userCols)
+    .from(schema.users)
+    .where(and(eq(schema.users.id, id), isNull(schema.users.deletedAt)))
+    .limit(1);
+  return user ?? null;
 }
