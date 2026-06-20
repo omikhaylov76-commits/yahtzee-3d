@@ -57,6 +57,8 @@ export interface OnlineCallbacks {
   onJoined: (joined: JoinedPayload) => void;
   /** Присутствие в идущей партии (2.2.d-2): playerId с живым сокетом. Оставшийся один → баннер «opponent left». */
   onPresence: (connected: string[]) => void;
+  /** Залогинен без ника (2.3.e-2b): сервер отказал во входе в комнату → увести на онбординг ника. */
+  onNicknameRequired: () => void;
 }
 
 export interface OnlineSession {
@@ -127,6 +129,13 @@ export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): 
     if (terminal) return;
     const v = presenceSchema.safeParse(p);
     if (v.success) cb.onPresence(v.data.connected);
+  });
+  // Залогинен без ника (2.3.e-2b): вход в комнату отклонён сервером. Терминально для этой попытки —
+  // стор погасит мёртвую сессию и уведёт на онбординг ника. Payload нет — схема не нужна.
+  socket.on(MSG.nicknameRequired, () => {
+    terminal = true;
+    cb.onNicknameRequired();
+    socket.close();
   });
 
   /** Терминальный отказ входа: фиксируем статус и закрываем сокет (войти не сможем — нет смысла держать). */

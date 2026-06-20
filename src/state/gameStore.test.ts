@@ -5,6 +5,7 @@ import { MemoryGameStorage } from '../storage/memoryGameStorage';
 import type { Transport, TransportListener } from '../transport/Transport';
 import type { Action, DomainEvent, GameState } from '../core';
 import type { OnlineCallbacks, OnlineSession } from '../platform/net';
+import { uiStore } from './uiStore';
 import type { OnlineIntent } from '../transport/NetworkTransport';
 
 const players = [{ name: 'A' }, { name: 'B' }];
@@ -134,6 +135,18 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
     store.getState().goOnline({ type: 'create' });
     store.getState().kickPlayer(2);
     expect(kick).toHaveBeenCalledWith(2);
+  });
+
+  it('onNicknameRequired (e-3b): гасит сессию, режим→local, ведёт на онбординг (return online)', () => {
+    const { store, cb, dispose } = onlineStore();
+    store.getState().goOnline({ type: 'join', code: 'ABC234' });
+    expect(store.getState().mode).toBe('online');
+    cb()?.onNicknameRequired();
+    expect(dispose).toHaveBeenCalled(); // сессия погашена (goLocal → session.dispose)
+    expect(store.getState().mode).toBe('local');
+    expect(uiStore.getState().view).toBe('nickname');
+    expect(uiStore.getState().nicknameReturn).toBe('online');
+    uiStore.getState().setView('menu'); // вернуть общий синглтон навигации в исходное (гигиена теста)
   });
 
   it('статус kicked гасит lobby — роутер уводит из лобби на экран входа (2.2.c-1)', () => {

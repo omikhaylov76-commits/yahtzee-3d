@@ -17,6 +17,7 @@ import {
 } from '../platform/net';
 import type { OnlineIntent } from '../transport/NetworkTransport';
 import type { LobbyPayload } from '../../shared/protocol';
+import { uiStore } from './uiStore';
 
 export interface GameStoreState {
   /** Текущее состояние партии (null — игра не начата). */
@@ -232,6 +233,13 @@ export function createGameStore(
             isHost: j.isHost,
             roomCode: j.roomId,
           }),
+        // Залогинен без ника (2.3.e-3b safety net): гасим мёртвую онлайн-сессию и ведём на онбординг
+        // (вернёмся в online). Проактивный гейт в OnlineScreen обычно не доводит сюда — это страховка.
+        onNicknameRequired: () => {
+          get().goLocal();
+          uiStore.getState().setNicknameReturn('online');
+          uiStore.getState().setView('nickname');
+        },
       });
       switchTo(session.transport);
       set({

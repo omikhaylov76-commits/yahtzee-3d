@@ -3,6 +3,7 @@ import { Screen } from '../components/Screen';
 import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
 import { useUiStore } from '../../state/uiStore';
+import { useAuthStore } from '../../state/authStore';
 import { useGameStore } from '../../state/gameStore';
 import type { OnlineStatus } from '../../platform/net';
 import { normalizeName, MAX_NAME_LEN } from '../../../shared/names';
@@ -31,6 +32,8 @@ const CODE_LEN = 6;
 
 export function OnlineScreen() {
   const setView = useUiStore((s) => s.setView);
+  const setNicknameReturn = useUiStore((s) => s.setNicknameReturn);
+  const user = useAuthStore((s) => s.user);
   const goOnline = useGameStore((s) => s.goOnline);
   const goLocal = useGameStore((s) => s.goLocal);
   const mode = useGameStore((s) => s.mode);
@@ -44,8 +47,22 @@ export function OnlineScreen() {
 
   // Чистим имя тем же общим фильтром, что и сервер (shared/names); серверная очистка всё равно финальна.
   const cleanedName = () => normalizeName(name) || undefined;
-  const create = () => goOnline({ type: 'create', name: cleanedName() });
+  // Гейт ника (2.3.e-3b): залогиненному без ника — сперва онбординг (вернёмся в online). Покрывает и
+  // deep-link `?room=` (этот экран — единственная точка create/join). Сервер всё равно страхует (e-2b).
+  const needsNick = () => {
+    if (user && !user.nickname) {
+      setNicknameReturn('online');
+      setView('nickname');
+      return true;
+    }
+    return false;
+  };
+  const create = () => {
+    if (needsNick()) return;
+    goOnline({ type: 'create', name: cleanedName() });
+  };
   const join = () => {
+    if (needsNick()) return;
     const c = code.trim();
     if (c) goOnline({ type: 'join', code: c, name: cleanedName() });
   };
