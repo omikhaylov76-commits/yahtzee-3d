@@ -39,6 +39,12 @@ import {
 import { generateUniqueCode, isValidCode, normalizeCode } from './codes';
 import { randomSeed, rollDiceValues } from './rng';
 import type { SessionUser } from './auth/sessionResolver';
+import {
+  actionMsgSchema,
+  createReqSchema,
+  joinReqSchema,
+  kickReqSchema,
+} from '../../shared/schemas';
 
 const DICE_COUNT = 5;
 const MAX_ROOMS = 500; // cap активных комнат на процесс — RAM узкое место (ADR-0009), graceful-отказ
@@ -213,6 +219,8 @@ export function attachRealtime(
     }
 
     socket.on(MSG.create, (req: CreateRequest) => {
+      const parsed = createReqSchema.safeParse(req);
+      if (!parsed.success) return; // кривой запрос (2.3.c-4) — игнор
       if (roomsCreated >= MAX_CREATE_PER_SOCKET || rooms.size >= MAX_ROOMS) {
         log.warn({ rooms: rooms.size, perSocket: roomsCreated }, 'refusing create (cap reached)');
         socket.emit(MSG.full, { roomId: '' }); // перегрузка — переиспользуем «занято» (UI — 2.2.a-3)
@@ -239,27 +247,33 @@ export function attachRealtime(
       };
       rooms.set(code, room);
       roomsCreated++;
-      const joined = addSeat(room, req?.name, true); // создатель — хозяин
+      const joined = addSeat(room, parsed.data.name, true); // создатель — хозяин
       socket.emit(MSG.joined, joined);
       broadcastLobby(room); // хозяин один — увидит себя в составе
       log.info({ roomId: code, playerId: joined.playerId }, 'room created');
     });
 
     socket.on(MSG.join, (req: JoinRequest) => {
+      const parsed = joinReqSchema.safeParse(req);
+      if (!parsed.success) {
+        socket.emit(MSG.notFound, { roomId: '' }); // кривой запрос (2.3.c-4) — как «не найдено»
+        return;
+      }
+      const { roomId, name, playerId } = parsed.data;
       const now = Date.now();
       if (now < joinLockedUntil) {
         // Залочен за перебор — молчим как при отсутствии комнаты (не подсказываем подборщику).
-        socket.emit(MSG.notFound, { roomId: req?.roomId ?? '' });
+        socket.emit(MSG.notFound, { roomId });
         return;
       }
-      const code = normalizeCode(req?.roomId);
+      const code = normalizeCode(roomId);
       const room = isValidCode(code) ? rooms.get(code) : undefined;
 
       // RECLAIM при реконнекте (2.1.e-2): вернувшийся клиент назвал свой playerId — возвращаем его в
       // удерживаемое место ИДУЩЕЙ партии и досылаем state. Гейт по `room.game`: в лобби места не
       // держатся (disconnect их удаляет), поэтому reclaim уместен только для НАЧАТОЙ партии — это и
       // сужает поверхность (подсадки в лобби по чужому playerId быть не может).
-      const reclaim = room?.game ? findReclaimSeat(room, req?.playerId) : undefined;
+      const reclaim = room?.game ? findReclaimSeat(room, playerId) : undefined;
       if (room && reclaim) {
         reclaim.socketId = socket.id; // перепривязка на новый сокет (старый умрёт по ping-timeout)
         room.emptiedAt = null; // кто-то вернулся — снимаем grace-таймер сноса партии
@@ -298,7 +312,7 @@ export function attachRealtime(
       }
 
       joinFails = 0; // успешный вход сбрасывает счётчик перебора
-      const joined = addSeat(room, req?.name, false);
+      const joined = addSeat(room, name, false);
       socket.emit(MSG.joined, joined);
       broadcastLobby(room);
       log.info({ roomId: code, playerId: joined.playerId, seat: joined.seat }, 'player joined');
@@ -322,14 +336,16 @@ export function attachRealtime(
     });
 
     socket.on(MSG.kick, (req: KickRequest) => {
+      const parsed = kickReqSchema.safeParse(req);
+      if (!parsed.success) return; // кривой запрос (2.3.c-4) — игнор
       const ctx = sockets.get(socket.id);
       if (!ctx) return;
       const room = rooms.get(ctx.roomId);
       if (!room || room.game) return; // кик только в ЛОББИ; во время партии — forfeit (2.4.c)
       const me = room.seats.find((s) => s.playerId === ctx.playerId);
       if (!me?.isHost) return; // выгнать может только хозяин
-      const seat = req?.seat;
-      if (typeof seat !== 'number' || seat < 0 || seat >= room.seats.length) return;
+      const seat = parsed.data.seat;
+      if (seat < 0 || seat >= room.seats.length) return;
       const victim = room.seats[seat];
       if (victim.playerId === ctx.playerId) return; // себя не кикаем (для выхода — Leave/disconnect)
 
@@ -346,19 +362,32 @@ export function attachRealtime(
     });
 
     socket.on(MSG.action, (msg: ActionMessage) => {
+      const parsed = actionMsgSchema.safeParse(msg);
+      if (!parsed.success) {
+        // Кривое действие (2.3.c-4): вне-диапазонный index / неизвестный type / длинный actionId.
+        socket.emit(MSG.denied, {
+          reason: 'bad-action',
+          actionId: (msg as { actionId?: string })?.actionId,
+        } satisfies DeniedPayload);
+        return;
+      }
       const ctx = sockets.get(socket.id);
       if (!ctx) return; // действие без посадки — игнор
       const room = rooms.get(ctx.roomId);
       if (!room?.game) {
         socket.emit(MSG.denied, {
           reason: 'no-game',
-          actionId: msg?.actionId,
+          actionId: parsed.data.actionId,
         } satisfies DeniedPayload);
         return;
       }
 
-      const result = applyNetworkAction(module, room.game, ctx.playerId, msg, () =>
-        rollDiceValues(DICE_COUNT),
+      const result = applyNetworkAction(
+        module,
+        room.game,
+        ctx.playerId,
+        parsed.data as ActionMessage,
+        () => rollDiceValues(DICE_COUNT),
       );
       room.game = result.room;
 
@@ -370,7 +399,7 @@ export function attachRealtime(
       if (result.denied) {
         socket.emit(MSG.denied, {
           reason: result.denied,
-          actionId: msg.actionId,
+          actionId: parsed.data.actionId,
         } satisfies DeniedPayload);
         return;
       }

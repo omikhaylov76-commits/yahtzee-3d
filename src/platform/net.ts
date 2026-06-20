@@ -14,10 +14,10 @@ import {
   PROTOCOL_VERSION,
   type JoinedPayload,
   type LobbyPayload,
-  type PresencePayload,
 } from '../../shared/protocol';
 import { NetworkTransport, type OnlineIntent } from '../transport/NetworkTransport';
 import type { Transport } from '../transport/Transport';
+import { joinedSchema, lobbySchema, presenceSchema } from '../../shared/schemas';
 
 // Адрес сервера платформы. В ПРОДЕ клиент раздаётся тем же сервером (same-origin, 2.P.1) → URL не нужен:
 // socket.io берёт origin страницы. В DEV клиент на Vite :5173, сервер на :3001 → явный localhost. Пустую
@@ -104,11 +104,15 @@ export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): 
   // События комнаты (имена — из общего MSG).
   socket.on(MSG.joined, (p) => {
     if (terminal) return;
-    cb.onJoined(p as JoinedPayload);
+    const v = joinedSchema.safeParse(p);
+    if (!v.success) return; // невалидный конверт (2.3.c-4) — игнор
+    cb.onJoined(v.data);
     cb.onStatus('waiting'); // сели в комнату — ждём в лобби (старт/игроков)
   });
   socket.on(MSG.lobby, (p) => {
-    if (!terminal) cb.onLobby(p as LobbyPayload);
+    if (terminal) return;
+    const v = lobbySchema.safeParse(p);
+    if (v.success) cb.onLobby(v.data);
   });
   // Сервер шлёт full с пустым roomId при перегрузке (cap комнат, a-1) — различаем «занято» и «перегружен».
   socket.on(MSG.full, (p) => closeWith((p as { roomId?: string })?.roomId ? 'full' : 'serverBusy'));
@@ -120,7 +124,9 @@ export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): 
   });
   socket.on(MSG.presence, (p) => {
     // Присутствие идущей партии (2.2.d-2): кто ещё на связи. Оставшийся один → баннер (логика — в сторе).
-    if (!terminal) cb.onPresence((p as PresencePayload)?.connected ?? []);
+    if (terminal) return;
+    const v = presenceSchema.safeParse(p);
+    if (v.success) cb.onPresence(v.data.connected);
   });
 
   /** Терминальный отказ входа: фиксируем статус и закрываем сокет (войти не сможем — нет смысла держать). */

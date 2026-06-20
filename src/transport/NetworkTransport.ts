@@ -10,12 +10,12 @@
 import {
   MSG,
   type DeniedPayload,
-  type JoinedPayload,
   type NetworkAction,
   type StatePayload,
 } from '../../shared/protocol';
 import type { Action, DomainEvent, GameState, PublicGameState } from '../core';
 import type { Transport, TransportListener } from './Transport';
+import { deniedSchema, joinedSchema, stateSchema } from '../../shared/schemas';
 
 /**
  * Узкий контракт сокета, нужный транспорту. Его удовлетворяет `Socket` из `socket.io-client`
@@ -67,12 +67,19 @@ export class NetworkTransport implements Transport {
     private readonly makeActionId: () => string = () => crypto.randomUUID(),
   ) {
     this.code = intent.type === 'join' ? intent.code : null;
-    socket.on(MSG.state, (p) => this.onState(p as StatePayload));
-    socket.on(MSG.denied, (p) => this.onDenied(p as DeniedPayload));
+    socket.on(MSG.state, (p) => {
+      // Оболочку проверяем (2.3.c-4); глубину публичного состояния доверяем своему серверу.
+      if (stateSchema.safeParse(p).success) this.onState(p as StatePayload);
+    });
+    socket.on(MSG.denied, (p) => {
+      const v = deniedSchema.safeParse(p);
+      if (v.success) this.onDenied(v.data);
+    });
     socket.on(MSG.joined, (p) => {
-      const j = p as JoinedPayload;
-      this.playerId = j.playerId;
-      this.code = j.roomId; // для create узнаём выданный код; для join — подтверждаем нормализованный
+      const v = joinedSchema.safeParse(p);
+      if (!v.success) return;
+      this.playerId = v.data.playerId;
+      this.code = v.data.roomId; // для create узнаём выданный код; для join — подтверждаем нормализованный
     });
     // Вход в комнату — на КАЖДЫЙ (ре)коннект сокета (2.1.e-2). socket.io сам переподключается после
     // блипа сети; первый раз создаём/входим по intent, на реконнекте называем playerId+код (reclaim).

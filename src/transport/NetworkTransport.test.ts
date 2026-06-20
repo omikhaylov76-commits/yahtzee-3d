@@ -75,7 +75,7 @@ describe('NetworkTransport — вход и состояние', () => {
     const s = new FakeSocket();
     const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
     s.server('connect', undefined); // первый вход — без playerId
-    s.server(MSG.joined, { roomId: 'dev', playerId: 'seat-abc', seat: 0 });
+    s.server(MSG.joined, { roomId: 'dev', playerId: 'seat-abc', seat: 0, isHost: false });
     s.server('connect', undefined); // реконнект — несём playerId для reclaim
 
     const joins = s.sent.filter((m) => m.event === MSG.join).map((m) => m.payload);
