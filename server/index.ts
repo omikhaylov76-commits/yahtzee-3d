@@ -34,6 +34,25 @@ const { getStatus } = attachRealtime(app.server, app.log, CLIENT_ORIGIN, yahtzee
 // Лёгкий мониторинг (2.P.2): только агрегаты — без кодов комнат и имён (код = пропуск в игру).
 app.get('/status', async () => getStatus());
 
+// Вход через Google (2.3.b) — ОПЦИОНАЛЕН: без GOOGLE_* сервер поднимается как раньше (прод-пилот/dev
+// без входа). Динамический импорт держит БД-слой ленивым — грузится лишь когда вход реально включён.
+const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } = process.env;
+if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI) {
+  const { createGoogleAuthProvider } = await import('./platform/auth/google');
+  const { registerAuth } = await import('./platform/auth/routes');
+  registerAuth(
+    app,
+    createGoogleAuthProvider({
+      clientId: GOOGLE_CLIENT_ID,
+      clientSecret: GOOGLE_CLIENT_SECRET,
+      redirectUri: GOOGLE_REDIRECT_URI,
+    }),
+  );
+  app.log.info('google auth enabled');
+} else {
+  app.log.info('google auth disabled (no GOOGLE_* env)');
+}
+
 // Раздача собранного клиента same-origin (2.P.1): один адрес отдаёт и игру, и realtime — другу одна
 // ссылка. Регистрируем ТОЛЬКО если клиент собран: в dev его обычно нет (Vite на :5173), а
 // @fastify/static бросает на несуществующем root (аудит M5). `/socket.io/*` перехватывает engine.io ДО
