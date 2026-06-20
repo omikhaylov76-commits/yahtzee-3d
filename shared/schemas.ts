@@ -16,6 +16,7 @@ export const joinReqSchema = z.object({
   playerId: z.string().optional(),
 });
 export const kickReqSchema = z.object({ seat: z.number().int() });
+export const readyReqSchema = z.object({ ready: z.boolean() });
 // Тело смены ника (2.3.e-2a, HTTP). Защита от мусора/размера; настоящая валидация (длина/невидимки/
 // резерв/уникальность) — в setNickname/isValidNickname на сервере.
 export const nicknameBodySchema = z.object({ nickname: z.string().max(100) });
@@ -46,7 +47,14 @@ export const joinedSchema = z.object({
 });
 export const lobbySchema = z.object({
   roomId: z.string(),
-  players: z.array(z.object({ seat: z.number().int(), name: z.string(), isHost: z.boolean() })),
+  players: z.array(
+    z.object({
+      seat: z.number().int(),
+      name: z.string(),
+      isHost: z.boolean(),
+      ready: z.boolean(),
+    }),
+  ),
   capacity: z.number().int(),
   canStart: z.boolean(),
 });

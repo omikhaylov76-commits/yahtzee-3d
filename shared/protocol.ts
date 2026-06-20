@@ -27,6 +27,7 @@ export const MSG = {
   create: 'room:create',
   join: 'room:join',
   start: 'room:start',
+  ready: 'room:ready', // тоггл готовности места (ADR-0016, ready-up в open/persistent)
   kick: 'room:kick', // хозяин выгоняет игрока из лобби (2.2.c-1)
   action: 'action',
   // сервер -> клиент
@@ -82,6 +83,11 @@ export interface KickRequest {
   seat: number;
 }
 
+/** Тоггл готовности своего места (ADR-0016, ready-up в open/persistent). Авто-старт — когда все готовы. */
+export interface ReadyRequest {
+  ready: boolean;
+}
+
 /** Подтверждение посадки: стабильный `playerId` места (для авторизации действий), индекс и роль. */
 export interface JoinedPayload {
   roomId: string;
@@ -91,11 +97,13 @@ export interface JoinedPayload {
   isHost: boolean;
 }
 
-/** Один игрок в составе лобби (до старта партии): место, имя, роль. */
+/** Один игрок в составе лобби (до старта партии): место, имя, роль, готовность. */
 export interface LobbyPlayer {
   seat: number;
   name: string;
   isHost: boolean;
+  /** Отметился «готов» (ADR-0016, ready-up в open/persistent). В приватном лобби не используется. */
+  ready: boolean;
 }
 
 /**

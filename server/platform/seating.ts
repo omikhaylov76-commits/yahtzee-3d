@@ -47,16 +47,32 @@ export interface Room {
   emptiedAt: number | null;
 }
 
-/** Можно ли уже стартовать: партия ещё не идёт и набрался минимум игроков. */
+/** Можно ли уже стартовать (host-Start, приватная комната): партия ещё не идёт и набрался минимум. */
 export function canStart(room: Room): boolean {
   return room.game === null && room.seats.length >= MIN_TO_START;
+}
+
+/**
+ * Готов ли стол к авто-старту по согласию (ADR-0016, ready-up в open/persistent): партия не идёт,
+ * набралось ≥ MIN_TO_START и ВСЕ присутствующие отметились «готов». В лобби мёртвых мест нет
+ * (disconnect их удаляет) → «все места» = «все присутствующие». Чистая; гейт visibility — в realtime.
+ */
+export function allReadyToStart(room: Room): boolean {
+  return (
+    room.game === null && room.seats.length >= MIN_TO_START && room.seats.every((s) => s.ready)
+  );
 }
 
 /** Снимок состава лобби (до старта) для рассылки клиентам: список игроков, вместимость, готовность. */
 export function lobbySnapshot(room: Room): LobbyPayload {
   return {
     roomId: room.id,
-    players: room.seats.map((s, i) => ({ seat: i, name: s.name, isHost: s.isHost })),
+    players: room.seats.map((s, i) => ({
+      seat: i,
+      name: s.name,
+      isHost: s.isHost,
+      ready: s.ready,
+    })),
     capacity: ROOM_CAPACITY,
     canStart: canStart(room),
   };

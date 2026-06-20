@@ -5,6 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  allReadyToStart,
   canStart,
   dedupeName,
   ensureHost,
@@ -82,8 +83,8 @@ describe('lobbySnapshot', () => {
     expect(lobbySnapshot(r)).toEqual({
       roomId: 'ABC234',
       players: [
-        { seat: 0, name: 'Alice', isHost: true },
-        { seat: 1, name: 'Bob', isHost: false },
+        { seat: 0, name: 'Alice', isHost: true, ready: false },
+        { seat: 1, name: 'Bob', isHost: false, ready: false },
       ],
       capacity: ROOM_CAPACITY,
       canStart: true,
@@ -191,5 +192,27 @@ describe('resetRoomToLobby', () => {
     r.emptiedAt = 123;
     resetRoomToLobby(r);
     expect(r.emptiedAt).toBeNull();
+  });
+});
+
+describe('allReadyToStart', () => {
+  it('true: все готовы и их ≥ MIN_TO_START, партия не идёт', () => {
+    const r = room([seat('a', { ready: true }), seat('b', { ready: true })]);
+    expect(allReadyToStart(r)).toBe(true);
+  });
+
+  it('false: хотя бы один не готов', () => {
+    const r = room([seat('a', { ready: true }), seat('b', { ready: false })]);
+    expect(allReadyToStart(r)).toBe(false);
+  });
+
+  it('false: готов только один (< MIN_TO_START)', () => {
+    const r = room([seat('a', { ready: true })]);
+    expect(allReadyToStart(r)).toBe(false);
+  });
+
+  it('false: партия уже идёт', () => {
+    const r = room([seat('a', { ready: true }), seat('b', { ready: true })], {} as Room['game']);
+    expect(allReadyToStart(r)).toBe(false);
   });
 });

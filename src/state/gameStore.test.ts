@@ -243,7 +243,7 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
     cb()?.onJoined({ roomId: 'K7Q9ZP', playerId: 'seat-1', seat: 0, isHost: true });
     cb()?.onLobby({
       roomId: 'K7Q9ZP',
-      players: [{ seat: 0, name: 'Alice', isHost: true }],
+      players: [{ seat: 0, name: 'Alice', isHost: true, ready: false }],
       capacity: 4,
       canStart: false,
     });

@@ -23,11 +23,13 @@ import {
   type JoinedPayload,
   type KickRequest,
   type PresencePayload,
+  type ReadyRequest,
   type ResetPayload,
   type StatePayload,
 } from '../../shared/protocol';
 import { applyNetworkAction, startGame, type YahtzeeModule } from './rooms';
 import {
+  allReadyToStart,
   canStart,
   dedupeName,
   ensureHost,
@@ -47,6 +49,7 @@ import {
   createReqSchema,
   joinReqSchema,
   kickReqSchema,
+  readyReqSchema,
 } from '../../shared/schemas';
 import { rowsForCompletedGame } from './stats/onGameOver';
 import type { MatchRows } from './stats/buildRows';
@@ -122,6 +125,21 @@ export function attachRealtime(
   /** Разослать всем в комнате актуальный состав лобби (до старта партии). */
   function broadcastLobby(room: Room): void {
     io.to(room.id).emit(MSG.lobby, lobbySnapshot(room));
+  }
+
+  /**
+   * Запустить партию в комнате: состояние ядра (места → игроки + серверный seed) и первый снимок всем.
+   * Общий путь для ручного старта хозяином (приватная, 2.2) и авто-старта по готовности (open/persistent,
+   * ADR-0016). Вызывающий уже проверил право/условие старта.
+   */
+  function startRoom(room: Room, by: 'host' | 'ready'): void {
+    room.game = startGame(
+      module,
+      room.seats.map((s) => ({ id: s.playerId, name: s.name })),
+      randomSeed(),
+    );
+    log.info({ roomId: room.id, players: room.seats.length, by }, 'game started');
+    io.to(room.id).emit(MSG.state, snapshot(room, []));
   }
 
   /**
@@ -355,15 +373,26 @@ export function attachRealtime(
       const room = rooms.get(ctx.roomId);
       if (!room) return;
       const me = room.seats.find((s) => s.playerId === ctx.playerId);
-      if (!me?.isHost) return; // запустить партию может только хозяин
+      if (!me?.isHost) return; // ручной старт хозяином — для приватной комнаты (2.2)
       if (!canStart(room)) return; // нужно ≥2 игроков и партия ещё не идёт
-      room.game = startGame(
-        module,
-        room.seats.map((s) => ({ id: s.playerId, name: s.name })),
-        randomSeed(),
-      );
-      log.info({ roomId: room.id, players: room.seats.length }, 'game started by host');
-      io.to(room.id).emit(MSG.state, snapshot(room, []));
+      startRoom(room, 'host');
+    });
+
+    // Готовность места (ADR-0016, ready-up): ТОЛЬКО open/persistent (приватные стартует хозяин выше).
+    // Тоггл своего `ready` + рассылка состава; когда ВСЕ присутствующие готовы и их ≥2 — авто-старт.
+    socket.on(MSG.ready, (req: ReadyRequest) => {
+      const parsed = readyReqSchema.safeParse(req);
+      if (!parsed.success) return; // кривой запрос (2.3.c-4) — игнор
+      const ctx = sockets.get(socket.id);
+      if (!ctx) return;
+      const room = rooms.get(ctx.roomId);
+      if (!room || room.game) return; // готовность только в ЛОББИ (партия не идёт)
+      if (room.visibility === 'private') return; // приватные — host-Start, ready не применяется
+      const me = room.seats.find((s) => s.playerId === ctx.playerId);
+      if (!me) return;
+      me.ready = parsed.data.ready;
+      broadcastLobby(room);
+      if (allReadyToStart(room)) startRoom(room, 'ready'); // предохранитель залипших — c
     });
 
     socket.on(MSG.kick, (req: KickRequest) => {
