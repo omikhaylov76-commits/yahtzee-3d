@@ -7,9 +7,11 @@ import { describe, it, expect } from 'vitest';
 import {
   allReadyToStart,
   canStart,
+  createHouseTables,
   dedupeName,
   ensureHost,
   findReclaimSeat,
+  HOUSE_TABLES,
   lobbySnapshot,
   MIN_TO_START,
   resetRoomToLobby,
@@ -214,5 +216,34 @@ describe('allReadyToStart', () => {
   it('false: партия уже идёт', () => {
     const r = room([seat('a', { ready: true }), seat('b', { ready: true })], {} as Room['game']);
     expect(allReadyToStart(r)).toBe(false);
+  });
+});
+
+describe('createHouseTables', () => {
+  it('создаёт 5 дежурных: persistent, пустые, с морскими названиями и id house-N', () => {
+    const tables = createHouseTables();
+    expect(tables).toHaveLength(5);
+    expect(tables.every((t) => t.visibility === 'persistent')).toBe(true);
+    expect(tables.every((t) => t.game === null && t.seats.length === 0)).toBe(true);
+    expect(tables.map((t) => t.id)).toEqual([
+      'house-1',
+      'house-2',
+      'house-3',
+      'house-4',
+      'house-5',
+    ]);
+    expect(tables.map((t) => t.title)).toEqual(HOUSE_TABLES.map((h) => h.title));
+  });
+
+  it('каждый вызов даёт СВЕЖИЕ объекты (без общих ссылок на seats)', () => {
+    const a = createHouseTables();
+    const b = createHouseTables();
+    expect(a[0]).not.toBe(b[0]);
+    expect(a[0].seats).not.toBe(b[0].seats);
+  });
+
+  it('id дежурных НЕ являются валидными кодами комнат (вход только публичный, joinOpen)', () => {
+    // Страховка инварианта ADR-0017: дежурные не пересекаются с пространством секретных кодов.
+    expect(HOUSE_TABLES.every((t) => t.id.includes('house-'))).toBe(true);
   });
 });

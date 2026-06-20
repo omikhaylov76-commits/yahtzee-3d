@@ -31,9 +31,11 @@ import { applyNetworkAction, startGame, type YahtzeeModule } from './rooms';
 import {
   allReadyToStart,
   canStart,
+  createHouseTables,
   dedupeName,
   ensureHost,
   findReclaimSeat,
+  HOUSE_TABLES,
   lobbySnapshot,
   resetRoomToLobby,
   ROOM_CAPACITY,
@@ -67,7 +69,7 @@ const MAX_MSG_BYTES = 4096; // лимит размера любого сокет
 /** Безопасный снимок для `/status` (2.P.2): ТОЛЬКО агрегаты — без кодов комнат и имён игроков. */
 export interface StatusSnapshot {
   connections: number; // всего живых сокетов (включая ещё не севших в комнату)
-  rooms: number; // всего комнат в памяти
+  rooms: number; // активных комнат (с партией или живыми игроками; простаивающие дежурные не в счёт)
   inLobby: number; // из них в лобби (партия не начата)
   inGame: number; // из них с идущей партией
   playersOnline: number; // игроков с живым сокетом, сидящих в комнатах
@@ -113,6 +115,9 @@ export function attachRealtime(
       });
   });
   const rooms = new Map<string, Room>();
+  // Дежурные (persistent) столы (ADR-0017): сеем один раз при старте; sweeper их не сносит, cap не считает.
+  for (const table of createHouseTables()) rooms.set(table.id, table);
+  log.info({ count: HOUSE_TABLES.length }, 'house tables seeded');
   const sockets = new Map<string, { roomId: string; playerId: string }>(); // socket.id -> место
   let connections = 0;
 
@@ -183,13 +188,21 @@ export function attachRealtime(
     for (const [id, room] of rooms) {
       const noLive = room.seats.length === 0 || room.seats.every((s) => s.socketId === null);
       if (room.game === null) {
+        // Дежурный (persistent) стол не сносим — пустое лобби живёт всегда (ADR-0017).
+        if (room.visibility === 'persistent') continue;
         if (noLive || now - room.createdAt > LOBBY_TTL_MS) {
           rooms.delete(id);
           log.info({ roomId: id }, 'lobby swept (idle/abandoned)');
         }
       } else if (noLive && room.emptiedAt !== null && now - room.emptiedAt > GAME_GRACE_MS) {
-        rooms.delete(id);
-        log.info({ roomId: id }, 'abandoned game swept (grace elapsed)');
+        // Брошенную партию дежурного стола НЕ удаляем — возвращаем стол в лобби (он постоянный, ADR-0017).
+        if (room.visibility === 'persistent') {
+          resetRoomToLobby(room);
+          log.info({ roomId: id }, 'house table reset to lobby (abandoned game)');
+        } else {
+          rooms.delete(id);
+          log.info({ roomId: id }, 'abandoned game swept (grace elapsed)');
+        }
       }
     }
   }, SWEEP_EVERY_MS);
@@ -267,8 +280,10 @@ export function attachRealtime(
       const parsed = createReqSchema.safeParse(req);
       if (!parsed.success) return; // кривой запрос (2.3.c-4) — игнор
       if (needsNickname()) return; // залогиненный без ника — сперва онбординг (2.3.e-2b)
-      if (roomsCreated >= MAX_CREATE_PER_SOCKET || rooms.size >= MAX_ROOMS) {
-        log.warn({ rooms: rooms.size, perSocket: roomsCreated }, 'refusing create (cap reached)');
+      // cap по ПОЛЬЗОВАТЕЛЬСКИМ комнатам — дежурные (persistent) всегда в реестре, их не учитываем (ADR-0017).
+      const userRooms = [...rooms.values()].filter((r) => r.visibility !== 'persistent').length;
+      if (roomsCreated >= MAX_CREATE_PER_SOCKET || userRooms >= MAX_ROOMS) {
+        log.warn({ userRooms, perSocket: roomsCreated }, 'refusing create (cap reached)');
         socket.emit(MSG.full, { roomId: '' }); // перегрузка — переиспользуем «занято» (UI — 2.2.a-3)
         return;
       }
@@ -514,7 +529,8 @@ export function attachRealtime(
         // гарантируем живого хозяина (минимальное наследование) и обновляем состав у оставшихся.
         room.seats = room.seats.filter((s) => s.playerId !== ctx.playerId);
         if (room.seats.length === 0) {
-          rooms.delete(room.id); // пустое лобби убираем сразу
+          // Пустое лобби убираем сразу — КРОМЕ дежурного (persistent) стола: он постоянный (ADR-0017).
+          if (room.visibility !== 'persistent') rooms.delete(room.id);
         } else {
           ensureHost(room);
           resyncSeats(room); // индексы сдвинулись после filter — освежить seat у оставшихся (баг 2.2.a)
@@ -538,15 +554,20 @@ export function attachRealtime(
    * комнату) и `seat.name`. Синхронный проход по реестру (Node однопоточный — гонок нет).
    */
   function getStatus(): StatusSnapshot {
+    let activeRooms = 0;
     let inLobby = 0;
     let inGame = 0;
     let playersOnline = 0;
     for (const room of rooms.values()) {
+      const live = room.seats.some((s) => s.socketId !== null);
+      // Простаивающий стол (нет партии и нет живых) — напр. пустой дежурный — не считаем активностью.
+      if (room.game === null && !live) continue;
+      activeRooms++;
       if (room.game === null) inLobby++;
       else inGame++;
       playersOnline += room.seats.filter((s) => s.socketId !== null).length;
     }
-    return { connections, rooms: rooms.size, inLobby, inGame, playersOnline };
+    return { connections, rooms: activeRooms, inLobby, inGame, playersOnline };
   }
 
   /**

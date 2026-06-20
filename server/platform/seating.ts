@@ -35,6 +35,8 @@ export interface Room {
    * `open`/`persistent` используют ready-up и реванш (ADR-0016); `private` — host-Start (2.2).
    */
   visibility: 'private' | 'open' | 'persistent';
+  /** Отображаемое имя стола (open/persistent) для публичного списка (ADR-0017). Приватные — без названия. */
+  title?: string;
   seats: Seat[];
   game: RoomState | null;
   /** Метка создания (мс) — для TTL/сборки мусора заброшенных комнат (ADR-0009, защита памяти). */
@@ -106,6 +108,33 @@ export function resetRoomToLobby(room: Room): void {
   for (const s of room.seats) s.ready = false;
   room.emptiedAt = null;
   ensureHost(room);
+}
+
+/** Дежурные (persistent) столы сервера (ADR-0017): 5 постоянных, морская тема в тон Auros. */
+export const HOUSE_TABLES: readonly { id: string; title: string }[] = [
+  { id: 'house-1', title: 'Tide Table' },
+  { id: 'house-2', title: 'Coral Reef' },
+  { id: 'house-3', title: 'The Lagoon' },
+  { id: 'house-4', title: 'Deep Current' },
+  { id: 'house-5', title: 'The Abyss' },
+];
+
+/**
+ * Свежие дежурные столы для посева в реестр при старте сервера (ADR-0017): пустое лобби, visibility
+ * `persistent`. id ВНЕ Crockford-пространства кодов (`house-N` нормализуется в невалидный код) — вход
+ * публичный по id (joinOpen, 2.5.d), не по секретному коду. Чистая (без сокетов) → тестируема; посев в
+ * Map делает realtime. Каждый вызов — свежие объекты (без общих ссылок на `seats`).
+ */
+export function createHouseTables(): Room[] {
+  return HOUSE_TABLES.map((t) => ({
+    id: t.id,
+    visibility: 'persistent' as const,
+    title: t.title,
+    seats: [],
+    game: null,
+    createdAt: 0, // persistent не подметается по TTL — значение createdAt неважно
+    emptiedAt: null,
+  }));
 }
 
 /**
