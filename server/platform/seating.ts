@@ -5,7 +5,7 @@
  * что у rooms.ts/realtime.ts.
  */
 import { normalizeName } from '../../shared/names';
-import type { LobbyPayload } from '../../shared/protocol';
+import type { LobbyPayload, OpenTable } from '../../shared/protocol';
 import type { RoomState } from './rooms';
 
 /** До 4 игроков в комнате (2.2); партию запускает хозяин кнопкой Start при ≥ MIN_TO_START. */
@@ -135,6 +135,33 @@ export function createHouseTables(): Room[] {
     createdAt: 0, // persistent не подметается по TTL — значение createdAt неважно
     emptiedAt: null,
   }));
+}
+
+/** Статус стола для публичного списка (2.5.d): идёт партия / заполнен / ждёт игроков. */
+function tableStatus(room: Room): OpenTable['status'] {
+  if (room.game) return 'in-game';
+  if (room.seats.length >= ROOM_CAPACITY) return 'full';
+  return 'waiting';
+}
+
+/**
+ * Публичный список открытых/дежурных столов (ADR-0017, 2.5.d): только `visibility!=='private'`, только
+ * агрегаты — без имён игроков и без секретных кодов приватных. `tableId` = публичный id для входа
+ * (joinOpen). Чистая (без сокетов) → тестируема; зовётся из realtime для `GET /tables`.
+ */
+export function publicTables(rooms: Iterable<Room>): OpenTable[] {
+  const out: OpenTable[] = [];
+  for (const room of rooms) {
+    if (room.visibility === 'private') continue;
+    out.push({
+      tableId: room.id,
+      title: room.title ?? 'Open table',
+      count: room.seats.length,
+      capacity: ROOM_CAPACITY,
+      status: tableStatus(room),
+    });
+  }
+  return out;
 }
 
 /**

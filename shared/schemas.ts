@@ -9,9 +9,18 @@ import { z } from 'zod';
 const DICE_COUNT = 5;
 
 // --- от клиента НА СЕРВЕР (строго: клиент недоверенный) ---
-export const createReqSchema = z.object({ name: z.string().optional() });
+export const createReqSchema = z.object({
+  name: z.string().optional(),
+  open: z.boolean().optional(),
+  title: z.string().max(100).optional(),
+});
 export const joinReqSchema = z.object({
   roomId: z.string(),
+  name: z.string().optional(),
+  playerId: z.string().optional(),
+});
+export const joinOpenReqSchema = z.object({
+  tableId: z.string(),
   name: z.string().optional(),
   playerId: z.string().optional(),
 });

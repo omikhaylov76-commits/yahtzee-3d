@@ -19,9 +19,11 @@ import {
   type ActionMessage,
   type CreateRequest,
   type DeniedPayload,
+  type JoinOpenRequest,
   type JoinRequest,
   type JoinedPayload,
   type KickRequest,
+  type OpenTable,
   type PresencePayload,
   type ReadyRequest,
   type ResetPayload,
@@ -37,6 +39,7 @@ import {
   findReclaimSeat,
   HOUSE_TABLES,
   lobbySnapshot,
+  publicTables,
   resetRoomToLobby,
   ROOM_CAPACITY,
   seatName,
@@ -46,9 +49,11 @@ import { generateUniqueCode, isValidCode, normalizeCode } from './codes';
 import { randomSeed, rollDiceValues } from './rng';
 import type { SessionUser } from './auth/sessionResolver';
 import { DELETED_PLAYER_NAME } from '../../shared/nickname';
+import { normalizeName } from '../../shared/names';
 import {
   actionMsgSchema,
   createReqSchema,
+  joinOpenReqSchema,
   joinReqSchema,
   kickReqSchema,
   readyReqSchema,
@@ -88,6 +93,7 @@ export function attachRealtime(
 ): {
   io: Server;
   getStatus: () => StatusSnapshot;
+  getTables: () => OpenTable[];
   isPlayerActive: (userId: string) => boolean;
   forgetUser: (userId: string) => void;
 } {
@@ -299,9 +305,12 @@ export function attachRealtime(
         socket.emit(MSG.full, { roomId: '' });
         return;
       }
+      // open=true → открытый стол (в списке, вход без кода, старт по готовности); иначе приватный по коду (2.2).
+      const open = parsed.data.open === true;
       const room: Room = {
         id: code,
-        visibility: 'private', // создание по коду = приватная (open/persistent появятся в 2.5.c/d)
+        visibility: open ? 'open' : 'private',
+        title: open ? normalizeName(parsed.data.title) || undefined : undefined,
         seats: [],
         game: null,
         createdAt: Date.now(),
@@ -309,10 +318,48 @@ export function attachRealtime(
       };
       rooms.set(code, room);
       roomsCreated++;
-      const joined = addSeat(room, parsed.data.name, true); // создатель — хозяин
+      // Приватная — создатель хозяин (host-Start, 2.2); открытая — без хозяина (старт по готовности, ADR-0016).
+      const joined = addSeat(room, parsed.data.name, !open);
+      if (open && !room.title) room.title = `${room.seats[0].name}'s table`; // дефолт названия из имени
       socket.emit(MSG.joined, joined);
-      broadcastLobby(room); // хозяин один — увидит себя в составе
-      log.info({ roomId: code, playerId: joined.playerId }, 'room created');
+      broadcastLobby(room);
+      log.info(
+        { roomId: code, visibility: room.visibility, playerId: joined.playerId },
+        'room created',
+      );
+    });
+
+    // Вход в ОТКРЫТЫЙ/дежурный стол по публичному id из списка (ADR-0017, 2.5.d): БЕЗ кода и БЕЗ
+    // анти-перебора (список публичен — перебирать нечего). Приватные сюда не пускаем (только по коду).
+    // Reclaim/hold на реконнект и предохранитель — d-1b. Гейт ника — как в create/join.
+    socket.on(MSG.joinOpen, (req: JoinOpenRequest) => {
+      const parsed = joinOpenReqSchema.safeParse(req);
+      if (!parsed.success) {
+        socket.emit(MSG.notFound, { roomId: '' }); // кривой запрос — как «не найдено»
+        return;
+      }
+      if (needsNickname()) return; // залогиненный без ника — сперва онбординг (2.3.e-2b)
+      const room = rooms.get(parsed.data.tableId);
+      // Нет такого / приватная — «не найдено» (приватные комнаты через публичный список НЕ светим).
+      if (!room || room.visibility === 'private') {
+        socket.emit(MSG.notFound, { roomId: parsed.data.tableId });
+        return;
+      }
+      if (room.game) {
+        socket.emit(MSG.alreadyStarted, { roomId: room.id }); // партия идёт — войти нельзя (зрителей нет)
+        return;
+      }
+      if (room.seats.length >= ROOM_CAPACITY) {
+        socket.emit(MSG.full, { roomId: room.id });
+        return;
+      }
+      const joined = addSeat(room, parsed.data.name, false); // открытый/дежурный стол без хозяина (ready-up)
+      socket.emit(MSG.joined, joined);
+      broadcastLobby(room);
+      log.info(
+        { roomId: room.id, playerId: joined.playerId, seat: joined.seat },
+        'joined open table',
+      );
     });
 
     socket.on(MSG.join, (req: JoinRequest) => {
@@ -570,6 +617,11 @@ export function attachRealtime(
     return { connections, rooms: activeRooms, inLobby, inGame, playersOnline };
   }
 
+  /** Публичный список открытых/дежурных столов для `GET /tables` (ADR-0017): только агрегаты, без имён/кодов. */
+  function getTables(): OpenTable[] {
+    return publicTables(rooms.values());
+  }
+
   /**
    * Активен ли игрок СЕЙЧАС (2.3.e-6): есть место с его `userId` и ЖИВЫМ сокетом. Гейт удаления аккаунта.
    * По ЖИВОМУ сокету (не по держимому grace-месту) — чтобы не блокировать ушедшего 2-3 мин (аудит M1) и
@@ -602,5 +654,5 @@ export function attachRealtime(
     }
   }
 
-  return { io, getStatus, isPlayerActive, forgetUser };
+  return { io, getStatus, getTables, isPlayerActive, forgetUser };
 }

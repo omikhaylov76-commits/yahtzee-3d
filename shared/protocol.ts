@@ -26,6 +26,7 @@ export const MSG = {
   // клиент -> сервер
   create: 'room:create',
   join: 'room:join',
+  joinOpen: 'room:joinOpen', // вход в открытый/дежурный стол по публичному id из списка (ADR-0017)
   start: 'room:start',
   ready: 'room:ready', // тоггл готовности места (ADR-0016, ready-up в open/persistent)
   kick: 'room:kick', // хозяин выгоняет игрока из лобби (2.2.c-1)
@@ -61,9 +62,13 @@ export interface ActionMessage {
   actionId: string;
 }
 
-/** Запрос на создание комнаты (2.2.a-1): сервер генерирует код и сажает автора хозяином. */
+/** Запрос на создание комнаты (2.2.a-1; `open` — 2.5.d): сервер генерирует код и сажает автора. */
 export interface CreateRequest {
   name?: string;
+  /** Открытый стол (ADR-0017): в публичном списке, вход без кода, старт по готовности. Иначе приватный. */
+  open?: boolean;
+  /** Название открытого стола (для списка); сервер чистит `normalizeName`, дефолт — из имени создателя. */
+  title?: string;
 }
 
 /** Запрос на вход в комнату по коду (2.2.a-1). `roomId` несёт КОД (сервер его нормализует). */
@@ -75,6 +80,16 @@ export interface JoinRequest {
    * сервером при первом входе), чтобы сервер вернул его в удерживаемое место идущей партии, а не
    * отбил `room:full`. Первый вход — без поля. Полноценный reconnect-токен на место — 2.4.c.
    */
+  playerId?: string;
+}
+
+/**
+ * Вход в ОТКРЫТЫЙ/дежурный стол по публичному id из списка (ADR-0017, 2.5.d): без секретного кода и без
+ * анти-перебора. `playerId` — reclaim при реконнекте (d-1b). Приватные комнаты этим путём не входятся.
+ */
+export interface JoinOpenRequest {
+  tableId: string;
+  name?: string;
   playerId?: string;
 }
 
@@ -151,4 +166,19 @@ export interface DeniedPayload {
  */
 export interface ResetPayload {
   roomId: string;
+}
+
+/** Статус стола в публичном списке (2.5.d): ждёт игроков / идёт партия / заполнен. */
+export type TableStatus = 'waiting' | 'in-game' | 'full';
+
+/**
+ * Публичная карточка стола для `GET /tables` (ADR-0017): ТОЛЬКО open/persistent, ТОЛЬКО агрегаты — без
+ * имён игроков и без секретных кодов приватных комнат. `tableId` — публичный id для входа (joinOpen).
+ */
+export interface OpenTable {
+  tableId: string;
+  title: string;
+  count: number;
+  capacity: number;
+  status: TableStatus;
 }

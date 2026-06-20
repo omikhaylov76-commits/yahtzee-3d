@@ -48,7 +48,7 @@ if (authEnabled) {
 }
 
 // Realtime поверх http-сервера fastify (2.0.c→2.1.b): рукопожатие + авторитетный игровой цикл.
-const { getStatus, isPlayerActive, forgetUser } = attachRealtime(
+const { getStatus, getTables, isPlayerActive, forgetUser } = attachRealtime(
   app.server,
   app.log,
   CLIENT_ORIGIN,
@@ -59,6 +59,10 @@ const { getStatus, isPlayerActive, forgetUser } = attachRealtime(
 
 // Лёгкий мониторинг (2.P.2): только агрегаты — без кодов комнат и имён (код = пропуск в игру).
 app.get('/status', async () => getStatus());
+
+// Публичный список открытых/дежурных столов (ADR-0017, 2.5.d): только агрегаты, без имён игроков и
+// без секретных кодов приватных комнат. Вход в стол из списка — по сокету (joinOpen).
+app.get('/tables', async () => getTables());
 
 if (authEnabled) {
   const { createGoogleAuthProvider } = await import('./platform/auth/google');

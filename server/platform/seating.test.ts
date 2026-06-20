@@ -14,6 +14,7 @@ import {
   HOUSE_TABLES,
   lobbySnapshot,
   MIN_TO_START,
+  publicTables,
   resetRoomToLobby,
   ROOM_CAPACITY,
   seatName,
@@ -245,5 +246,45 @@ describe('createHouseTables', () => {
   it('id дежурных НЕ являются валидными кодами комнат (вход только публичный, joinOpen)', () => {
     // Страховка инварианта ADR-0017: дежурные не пересекаются с пространством секретных кодов.
     expect(HOUSE_TABLES.every((t) => t.id.includes('house-'))).toBe(true);
+  });
+});
+
+describe('publicTables', () => {
+  it('включает open/persistent, исключает private; агрегаты без имён/кодов', () => {
+    const priv = room([seat('a')]); // private по умолчанию
+    const open = room([seat('b'), seat('c')]);
+    open.id = 'K7Q9ZP';
+    open.visibility = 'open';
+    open.title = 'Friday game';
+    const house = createHouseTables()[0];
+    const list = publicTables([priv, open, house]);
+    expect(list.map((t) => t.tableId)).toEqual(['K7Q9ZP', 'house-1']); // приватный исключён
+    expect(list[0]).toEqual({
+      tableId: 'K7Q9ZP',
+      title: 'Friday game',
+      count: 2,
+      capacity: ROOM_CAPACITY,
+      status: 'waiting',
+    });
+    expect(list[1].title).toBe('Tide Table');
+  });
+
+  it('status: in-game при идущей партии, full при заполнении', () => {
+    const full = room([seat('a'), seat('b'), seat('c'), seat('d')]);
+    full.visibility = 'open';
+    expect(publicTables([full])[0].status).toBe('full');
+    const playing = room([seat('a'), seat('b')], {} as Room['game']);
+    playing.visibility = 'open';
+    expect(publicTables([playing])[0].status).toBe('in-game');
+  });
+
+  it('открытый стол без названия → дефолт «Open table»', () => {
+    const open = room([seat('a')]);
+    open.visibility = 'open';
+    expect(publicTables([open])[0].title).toBe('Open table');
+  });
+
+  it('приватные не попадают в список (нет утечки кода)', () => {
+    expect(publicTables([room([seat('a')])])).toEqual([]);
   });
 });
