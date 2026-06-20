@@ -16,6 +16,9 @@ export const joinReqSchema = z.object({
   playerId: z.string().optional(),
 });
 export const kickReqSchema = z.object({ seat: z.number().int() });
+// Тело смены ника (2.3.e-2a, HTTP). Защита от мусора/размера; настоящая валидация (длина/невидимки/
+// резерв/уникальность) — в setNickname/isValidNickname на сервере.
+export const nicknameBodySchema = z.object({ nickname: z.string().max(100) });
 
 export const networkActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ROLL') }),

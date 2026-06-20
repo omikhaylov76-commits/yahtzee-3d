@@ -5,12 +5,48 @@
  * State — server-side с TTL (single-process; рестарт во время входа → повтор, приемлемо).
  */
 import { randomBytes } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AuthProvider } from './AuthProvider';
-import { findOrCreateUser, getUserById } from './users';
+import { findOrCreateUser, getUserById, setNickname, type PlatformUser } from './users';
 import { SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifySession } from './session';
+import { nicknameBodySchema } from '../../../shared/schemas';
 
 const STATE_TTL_MS = 10 * 60_000;
+
+/**
+ * Текущий залогиненный игрок по cookie сессии (2.3.e-2a) — общий гейт HTTP-эндпоинтов (вынесен из
+ * инлайна `/auth/me`). Отозванную/битую сессию чистит (clearCookie). НЕ шлёт ответ: вызывающий решает
+ * (200 + `{user:null}` для `/auth/me`; 401 для защищённых). `userId` берём ТОЛЬКО из сессии (ADR-0015 M4).
+ */
+async function currentUser(req: FastifyRequest, reply: FastifyReply): Promise<PlatformUser | null> {
+  const token = req.cookies[SESSION_COOKIE];
+  if (!token) return null;
+  const session = await verifySession(token);
+  if (!session) return null;
+  const user = await getUserById(session.userId);
+  if (!user || user.tokenVersion !== session.tokenVersion) {
+    reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    return null;
+  }
+  return user;
+}
+
+// Лёгкий самодельный rate-limit смены ника (2.3.e-2a): окно по userId. Single-process, сброс при
+// рестарте — принятый риск пилота (полноценный @fastify/rate-limit — 2.4/backlog).
+const NICK_MAX = 10;
+const NICK_WINDOW_MS = 5 * 60_000;
+const nickHits = new Map<string, number[]>();
+function allowNickChange(userId: string): boolean {
+  const now = Date.now();
+  const hits = (nickHits.get(userId) ?? []).filter((t) => now - t < NICK_WINDOW_MS);
+  if (hits.length >= NICK_MAX) {
+    nickHits.set(userId, hits);
+    return false;
+  }
+  hits.push(now);
+  nickHits.set(userId, hits);
+  return true;
+}
 
 export function registerAuth(app: FastifyInstance, provider: AuthProvider): void {
   // state → expiresAt (CSRF; одноразовый, с TTL). Истёкшие подметаем лениво на каждом start.
@@ -57,18 +93,34 @@ export function registerAuth(app: FastifyInstance, provider: AuthProvider): void
     }
   });
 
-  // Кто залогинен (по cookie). Сверяем tokenVersion — отозванная сессия → null + чистка cookie.
+  // Кто залогинен (по cookie). Через общий currentUser (сверка tokenVersion + чистка отозванной cookie).
   app.get('/auth/me', async (req, reply) => {
-    const token = req.cookies[SESSION_COOKIE];
-    if (!token) return { user: null };
-    const session = await verifySession(token);
-    if (!session) return { user: null };
-    const user = await getUserById(session.userId);
-    if (!user || user.tokenVersion !== session.tokenVersion) {
-      reply.clearCookie(SESSION_COOKIE, { path: '/' });
-      return { user: null };
+    const user = await currentUser(req, reply);
+    return {
+      user: user
+        ? {
+            id: user.id,
+            displayName: user.displayName,
+            nickname: user.nickname,
+            avatarUrl: user.avatarUrl,
+          }
+        : null,
+    };
+  });
+
+  // Сменить игровой ник (2.3.e-2a, ADR-0015). userId — из сессии; тело — zod; валидация/уникальность —
+  // в setNickname. Ответы: 200 {nickname} / 400 invalid|reserved / 409 taken / 401 / 429 (rate-limit).
+  app.post('/auth/nickname', async (req, reply) => {
+    const user = await currentUser(req, reply);
+    if (!user) return reply.code(401).send({ error: 'unauthorized' });
+    if (!allowNickChange(user.id)) return reply.code(429).send({ error: 'too_many_requests' });
+    const parsed = nicknameBodySchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid' });
+    const result = await setNickname(user.id, parsed.data.nickname);
+    if (!result.ok) {
+      return reply.code(result.reason === 'taken' ? 409 : 400).send({ error: result.reason });
     }
-    return { user: { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl } };
+    return { nickname: result.nickname };
   });
 
   // Выход — чистим cookie сессии.
