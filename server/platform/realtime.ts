@@ -23,6 +23,7 @@ import {
   type JoinedPayload,
   type KickRequest,
   type PresencePayload,
+  type ResetPayload,
   type StatePayload,
 } from '../../shared/protocol';
 import { applyNetworkAction, startGame, type YahtzeeModule } from './rooms';
@@ -32,6 +33,7 @@ import {
   ensureHost,
   findReclaimSeat,
   lobbySnapshot,
+  resetRoomToLobby,
   ROOM_CAPACITY,
   seatName,
   type Room,
@@ -221,6 +223,7 @@ export function attachRealtime(
         playerId,
         name,
         isHost,
+        ready: false, // готовность подтверждается в лобби (ready-up для open/persistent, 2.5.b)
         userId: sessionUser?.userId ?? null,
       });
       sockets.set(socket.id, { roomId: room.id, playerId });
@@ -265,6 +268,7 @@ export function attachRealtime(
       }
       const room: Room = {
         id: code,
+        visibility: 'private', // создание по коду = приватная (open/persistent появятся в 2.5.c/d)
         seats: [],
         game: null,
         createdAt: Date.now(),
@@ -450,6 +454,21 @@ export function attachRealtime(
             log.error({ err, roomId: room.id }, 'recordMatch failed'),
           );
         }
+      }
+
+      // ADR-0016: open/persistent стол ПЕРЕЖИВАЕТ партию — после game:over сбрасываем его в лобби
+      // (реванш). СТРОГО после сборки rows выше (resetRoomToLobby меняет room.seats — иначе
+      // залогиненные записались бы как гости). Приватные комнаты не трогаем (одноразовая партия по
+      // коду, 2.2). Клиентский возврат с экрана победителя в лобби по `room:reset` — 2.5.a-2.
+      if (
+        room.game &&
+        room.visibility !== 'private' &&
+        result.events.some((e) => e.type === 'game:over')
+      ) {
+        resetRoomToLobby(room);
+        io.to(room.id).emit(MSG.reset, { roomId: room.id } satisfies ResetPayload);
+        broadcastLobby(room);
+        log.info({ roomId: room.id }, 'table reset to lobby after game (open/persistent)');
       }
     });
 

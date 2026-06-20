@@ -11,6 +11,7 @@ import {
   findReclaimSeat,
   lobbySnapshot,
   MIN_TO_START,
+  resetRoomToLobby,
   ROOM_CAPACITY,
   seatName,
   type Room,
@@ -19,11 +20,18 @@ import {
 
 /** Краткая фабрика места (isHost по умолчанию false). */
 function seat(playerId: string, over: Partial<Seat> = {}): Seat {
-  return { socketId: `sock-${playerId}`, playerId, name: playerId, isHost: false, ...over };
+  return {
+    socketId: `sock-${playerId}`,
+    playerId,
+    name: playerId,
+    isHost: false,
+    ready: false,
+    ...over,
+  };
 }
 
 function room(seats: Seat[], game: Room['game'] = null): Room {
-  return { id: 'ABC234', seats, game, createdAt: 0, emptiedAt: null };
+  return { id: 'ABC234', visibility: 'private', seats, game, createdAt: 0, emptiedAt: null };
 }
 
 describe('findReclaimSeat', () => {
@@ -144,5 +152,44 @@ describe('seatName', () => {
 
   it('имя чистится общим normalizeName (XSS/невидимки)', () => {
     expect(seatName(null, '<b>Hi', 0)).toBe('bHi');
+  });
+});
+
+describe('resetRoomToLobby', () => {
+  it('обнуляет партию и сбрасывает готовность оставшихся', () => {
+    const r = room(
+      [seat('a', { isHost: true, ready: true }), seat('b', { ready: true })],
+      {} as Room['game'],
+    );
+    resetRoomToLobby(r);
+    expect(r.game).toBeNull();
+    expect(r.seats.every((s) => s.ready === false)).toBe(true);
+  });
+
+  it('убирает места ушедших по ходу (socketId===null), оставляет живых', () => {
+    const r = room(
+      [seat('a', { socketId: 'live', isHost: true }), seat('b', { socketId: null })],
+      {} as Room['game'],
+    );
+    resetRoomToLobby(r);
+    expect(r.seats.map((s) => s.playerId)).toEqual(['a']);
+  });
+
+  it('передаёт хозяина живому, если прежний хозяин ушёл по ходу (его место снято)', () => {
+    const r = room(
+      [seat('a', { socketId: null, isHost: true }), seat('b', { socketId: 'live' })],
+      {} as Room['game'],
+    );
+    resetRoomToLobby(r);
+    expect(r.seats).toHaveLength(1);
+    expect(r.seats[0].playerId).toBe('b');
+    expect(r.seats[0].isHost).toBe(true);
+  });
+
+  it('сбрасывает emptiedAt (маркер брошенной партии, не лобби)', () => {
+    const r = room([seat('a', { isHost: true })], {} as Room['game']);
+    r.emptiedAt = 123;
+    resetRoomToLobby(r);
+    expect(r.emptiedAt).toBeNull();
   });
 });

@@ -12,10 +12,14 @@
  * комнату, получить код), `room:start` (хозяин запускает партию при ≥2 — авто-старт убран),
  * рассылка состава лобби `room:lobby`, отказ `room:already-started`; в посадку добавлен `isHost`.
  * `roomId` теперь несёт КОД комнаты (в 2.1 это был литерал `dev`).
+ *
+ * v4 (2.5): открытые/дежурные столы + «стол переживает партию». 2.5.a-1 добавляет `room:reset`
+ * (партия завершилась → стол возвращается в лобби, для open/persistent; клиент гасит состояние,
+ * НЕ роняя сокет). Дальнейшие сообщения 2.5 (ready-up, joinOpen, список столов) — в этой же v4.
  */
 import type { Category, DomainEvent, PublicGameState } from '../src/core';
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Имена сокет-сообщений (одна точка истины для клиента и сервера). */
 export const MSG = {
@@ -28,6 +32,7 @@ export const MSG = {
   // сервер -> клиент
   joined: 'room:joined',
   lobby: 'room:lobby',
+  reset: 'room:reset', // партия завершилась → стол вернулся в лобби (ADR-0016, open/persistent)
   full: 'room:full',
   notFound: 'room:not-found',
   alreadyStarted: 'room:already-started',
@@ -129,4 +134,13 @@ export interface PresencePayload {
 export interface DeniedPayload {
   reason: string;
   actionId?: string;
+}
+
+/**
+ * Стол вернулся в лобби после завершившейся партии (ADR-0016, реванш) — для open/persistent. Клиент
+ * по этому сигналу гасит состояние игры (НЕ роняя сокет/playerId/комнату) и возвращается в лобби;
+ * актуальный состав придёт следом в `room:lobby`. Приватные комнаты это сообщение не получают.
+ */
+export interface ResetPayload {
+  roomId: string;
 }

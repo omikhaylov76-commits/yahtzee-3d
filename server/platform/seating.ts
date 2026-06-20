@@ -17,8 +17,10 @@ export interface Seat {
   socketId: string | null;
   playerId: string;
   name: string;
-  /** Хозяин ли это место (создатель комнаты). Хозяин запускает партию (2.2). */
+  /** Хозяин ли это место (создатель комнаты). Хозяин запускает партию в приватной комнате (2.2). */
   isHost: boolean;
+  /** Готов к старту по согласию (ADR-0016, ready-up в open/persistent). Тоггл сообщением — в 2.5.b. */
+  ready: boolean;
   /** Залогиненный аккаунт (2.3.c-3): userId платформы или null (гость). Для статистики/лидерборда (2.3.e). */
   userId?: string | null;
 }
@@ -27,6 +29,12 @@ export interface Seat {
 export interface Room {
   /** Код комнаты (Crockford base32) — он же ключ реестра комнат. */
   id: string;
+  /**
+   * Тип комнаты (ADR-0017): `private` — по коду (как 2.2, не в публичном списке); `open` — в
+   * списке, вход без кода; `persistent` — дежурный стол сервера (не сносится, переживает партию).
+   * `open`/`persistent` используют ready-up и реванш (ADR-0016); `private` — host-Start (2.2).
+   */
+  visibility: 'private' | 'open' | 'persistent';
   seats: Seat[];
   game: RoomState | null;
   /** Метка создания (мс) — для TTL/сборки мусора заброшенных комнат (ADR-0009, защита памяти). */
@@ -67,6 +75,21 @@ export function ensureHost(room: Room): Seat | undefined {
   const next = room.seats.find((s) => s.socketId !== null);
   if (next) next.isHost = true;
   return next;
+}
+
+/**
+ * Сброс стола в лобби после завершившейся партии (ADR-0016, «стол переживает партию» / реванш) —
+ * ТОЛЬКО для open/persistent (вызывающий гейтит по `visibility`; приватные комнаты не трогаем).
+ * Партию обнуляем; места ушедших по ходу (`socketId===null`) убираем — они не реваншируют; готовность
+ * всех сбрасываем; `emptiedAt` чистим (это маркер брошенной ПАРТИИ, не лобби); гарантируем живого
+ * хозяина. Чистая (без сокетов) → тестируема. Рассылку нового состава и `room:reset` делает realtime.
+ */
+export function resetRoomToLobby(room: Room): void {
+  room.game = null;
+  room.seats = room.seats.filter((s) => s.socketId !== null);
+  for (const s of room.seats) s.ready = false;
+  room.emptiedAt = null;
+  ensureHost(room);
 }
 
 /**

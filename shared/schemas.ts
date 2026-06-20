@@ -51,6 +51,7 @@ export const lobbySchema = z.object({
   canStart: z.boolean(),
 });
 export const presenceSchema = z.object({ connected: z.array(z.string()) });
+export const resetSchema = z.object({ roomId: z.string() });
 export const deniedSchema = z.object({ reason: z.string(), actionId: z.string().optional() });
 export const stateSchema = z.object({
   stateVersion: z.number().int(),
