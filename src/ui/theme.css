@@ -540,6 +540,37 @@ body {
     0 1px 0 rgba(0, 70, 66, 0.5);
 }
 
+/* Вторичный вход в аккаунт (2.3.b-2): опциональная ссылка под выбором режима. */
+.menu__account {
+  margin-top: var(--s-5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.menu__signin {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--heading);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-card);
+  text-decoration: none;
+  transition: border-color 0.12s ease;
+}
+.menu__signin:hover {
+  border-color: rgba(237, 255, 254, 0.4);
+}
+.menu__account-note {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 /* Кнопка «назад в меню» (setup/онлайн → меню) */
 .back-link {
   align-self: flex-start;
