@@ -576,7 +576,7 @@ body {
   font-size: 12px;
   color: var(--ice);
 }
-/* Инлайн-ссылка «Change» рядом с ником (2.3.e-3). */
+/* Текстовая ссылка-кнопка: «Signed in as ‹ник›» в меню → кабинет (2.3.e-5). */
 .menu__linkbtn {
   background: none;
   border: 0;
@@ -694,6 +694,7 @@ body {
 }
 .cabinet__danger-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 .cabinet__delete-go {

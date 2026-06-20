@@ -11,7 +11,7 @@ import { MAX_NAME_LEN } from '../../../shared/names';
  * отдельный экран) и кабинетом (inline-секция) — один источник UX ника.
  */
 const ERROR_TEXT: Record<NickError, string> = {
-  invalid: 'Use letters or numbers — up to 20 characters.',
+  invalid: 'Use 2–20 characters (letters or numbers).',
   reserved: 'That nickname is reserved. Try another.',
   taken: 'That nickname is taken. Try another.',
   rate: 'Too many attempts. Try again in a few minutes.',

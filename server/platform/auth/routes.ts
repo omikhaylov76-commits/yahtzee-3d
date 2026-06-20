@@ -24,7 +24,10 @@ async function currentUser(req: FastifyRequest, reply: FastifyReply): Promise<Pl
   const token = req.cookies[SESSION_COOKIE];
   if (!token) return null;
   const session = await verifySession(token);
-  if (!session) return null;
+  if (!session) {
+    reply.clearCookie(SESSION_COOKIE, { path: '/' }); // битый/истёкший токен — чистим, не копим мусор
+    return null;
+  }
   const user = await getUserById(session.userId);
   if (!user || user.tokenVersion !== session.tokenVersion) {
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
@@ -38,8 +41,16 @@ async function currentUser(req: FastifyRequest, reply: FastifyReply): Promise<Pl
 const NICK_MAX = 10;
 const NICK_WINDOW_MS = 5 * 60_000;
 const nickHits = new Map<string, number[]>();
+let lastNickSweep = 0;
 function allowNickChange(userId: string): boolean {
   const now = Date.now();
+  // Подметаем протухшие записи раз в окно — иначе Map растёт по числу аккаунтов (аудит 2.3.e).
+  if (now - lastNickSweep > NICK_WINDOW_MS) {
+    for (const [id, ts] of nickHits) {
+      if (ts.every((t) => now - t >= NICK_WINDOW_MS)) nickHits.delete(id);
+    }
+    lastNickSweep = now;
+  }
   const hits = (nickHits.get(userId) ?? []).filter((t) => now - t < NICK_WINDOW_MS);
   if (hits.length >= NICK_MAX) {
     nickHits.set(userId, hits);
@@ -137,13 +148,13 @@ export function registerAuth(
   });
 
   // Удаление аккаунта (2.3.e-6): НЕОБРАТИМО. userId — из сессии; запрет пока в живой игре (isPlayerActive);
-  // tombstone-транзакция + forgetUser (рвём сокеты/обезличиваем места — фикс гонки C1/M3) + чистим cookie.
+  // forgetUser (рвём сокеты/обезличиваем места) ДО tombstone-транзакции — закрывает гонку C1/M3 + остаточную; + cookie.
   app.delete('/auth/account', async (req, reply) => {
     const user = await currentUser(req, reply);
     if (!user) return reply.code(401).send({ error: 'unauthorized' });
     if (realtime.isPlayerActive(user.id)) return reply.code(409).send({ error: 'in_game' });
-    await deleteAccount(user.id);
-    realtime.forgetUser(user.id);
+    realtime.forgetUser(user.id); // ДО записи: обезличить места + рвать сокеты, чтобы поздний game:over
+    await deleteAccount(user.id); // соперника не записал ник удалённого (остаточная гонка из аудита).
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return { ok: true };
   });
