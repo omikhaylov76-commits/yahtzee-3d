@@ -12,6 +12,7 @@ import fastifyCookie from '@fastify/cookie';
 import { PROTOCOL_VERSION } from '../shared/protocol';
 import { yahtzeeModule } from './games/yahtzee';
 import { attachRealtime } from './platform/realtime';
+import type { SessionUser } from './platform/auth/sessionResolver';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? '0.0.0.0'; // Railway требует 0.0.0.0
@@ -30,24 +31,39 @@ app.register(fastifyCookie); // cookie сессии входа (2.3.c)
 
 app.get('/health', async () => ({ status: 'ok' }));
 
+// Вход через Google (2.3.b/c) — ОПЦИОНАЛЕН: без GOOGLE_* сервер поднимается как прод-пилот/dev.
+// Резолвер сессии нужен realtime (2.3.c-3 — имя из аккаунта), поэтому определяем ДО attachRealtime.
+// Динамический импорт держит БД-слой ленивым — грузится лишь когда вход включён.
+const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } = process.env;
+const authEnabled = Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI);
+let sessionResolver:
+  | ((cookieHeader: string | undefined) => Promise<SessionUser | null>)
+  | undefined;
+if (authEnabled) {
+  ({ resolveSessionUser: sessionResolver } = await import('./platform/auth/sessionResolver'));
+}
+
 // Realtime поверх http-сервера fastify (2.0.c→2.1.b): рукопожатие + авторитетный игровой цикл.
-const { getStatus } = attachRealtime(app.server, app.log, CLIENT_ORIGIN, yahtzeeModule);
+const { getStatus } = attachRealtime(
+  app.server,
+  app.log,
+  CLIENT_ORIGIN,
+  yahtzeeModule,
+  sessionResolver,
+);
 
 // Лёгкий мониторинг (2.P.2): только агрегаты — без кодов комнат и имён (код = пропуск в игру).
 app.get('/status', async () => getStatus());
 
-// Вход через Google (2.3.b) — ОПЦИОНАЛЕН: без GOOGLE_* сервер поднимается как раньше (прод-пилот/dev
-// без входа). Динамический импорт держит БД-слой ленивым — грузится лишь когда вход реально включён.
-const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI } = process.env;
-if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_REDIRECT_URI) {
+if (authEnabled) {
   const { createGoogleAuthProvider } = await import('./platform/auth/google');
   const { registerAuth } = await import('./platform/auth/routes');
   registerAuth(
     app,
     createGoogleAuthProvider({
-      clientId: GOOGLE_CLIENT_ID,
-      clientSecret: GOOGLE_CLIENT_SECRET,
-      redirectUri: GOOGLE_REDIRECT_URI,
+      clientId: GOOGLE_CLIENT_ID!,
+      clientSecret: GOOGLE_CLIENT_SECRET!,
+      redirectUri: GOOGLE_REDIRECT_URI!,
     }),
   );
   app.log.info('google auth enabled');

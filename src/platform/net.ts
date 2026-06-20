@@ -77,9 +77,10 @@ export interface OnlineSession {
  */
 export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): OnlineSession {
   // same-origin в проде (SERVER_URL undefined → io без URL берёт origin страницы); явный URL в dev.
+  // withCredentials — чтобы cookie сессии уехала в рукопожатие (2.3.c-3): сервер опознаёт залогиненного.
   const socket = SERVER_URL
-    ? io(SERVER_URL, { auth: { protocolVersion: PROTOCOL_VERSION } })
-    : io({ auth: { protocolVersion: PROTOCOL_VERSION } });
+    ? io(SERVER_URL, { auth: { protocolVersion: PROTOCOL_VERSION }, withCredentials: true })
+    : io({ auth: { protocolVersion: PROTOCOL_VERSION }, withCredentials: true });
   // mismatch/full/notFound/alreadyStarted — «терминальные»: достигнув их, не перетираем статусом сокета.
   let terminal = false;
 

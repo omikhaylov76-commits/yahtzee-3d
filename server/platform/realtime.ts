@@ -38,6 +38,7 @@ import {
 } from './seating';
 import { generateUniqueCode, isValidCode, normalizeCode } from './codes';
 import { randomSeed, rollDiceValues } from './rng';
+import type { SessionUser } from './auth/sessionResolver';
 
 const DICE_COUNT = 5;
 const MAX_ROOMS = 500; // cap активных комнат на процесс — RAM узкое место (ADR-0009), graceful-отказ
@@ -63,10 +64,32 @@ export function attachRealtime(
   log: FastifyBaseLogger,
   clientOrigin: string | string[],
   module: YahtzeeModule,
+  // Опознание залогиненного игрока по cookie сессии (2.3.c-3); инъекция из композиционного корня
+  // (БД-слой грузится только когда вход включён). Не передан → все играют гостями.
+  sessionResolver?: (cookieHeader: string | undefined) => Promise<SessionUser | null>,
 ): { io: Server; getStatus: () => StatusSnapshot } {
   const io = new Server(httpServer, {
-    cors: { origin: clientOrigin },
+    cors: { origin: clientOrigin, credentials: true },
     maxHttpBufferSize: MAX_MSG_BYTES,
+  });
+
+  // Рукопожатие: кладём в socket.data залогиненного игрока (или null). Ошибку резолвера не валим в
+  // disconnect — просто считаем гостем (вход не должен ломать игру).
+  io.use((socket, next) => {
+    if (!sessionResolver) {
+      socket.data.user = null;
+      next();
+      return;
+    }
+    sessionResolver(socket.handshake.headers.cookie)
+      .then((user) => {
+        socket.data.user = user;
+        next();
+      })
+      .catch(() => {
+        socket.data.user = null;
+        next();
+      });
   });
   const rooms = new Map<string, Room>();
   const sockets = new Map<string, { roomId: string; playerId: string }>(); // socket.id -> место
@@ -169,13 +192,21 @@ export function attachRealtime(
     function addSeat(room: Room, rawName: string | undefined, isHost: boolean): JoinedPayload {
       const seat = room.seats.length;
       const playerId = `seat-${randomUUID().slice(0, 8)}`;
-      // Имя: общий фильтр (NFC/невидимки/XSS/длина — shared/names) → дефолт по месту → дедуп в комнате.
-      const base = normalizeName(rawName) || `Player ${seat + 1}`;
+      // Залогиненный (2.3.c-3) → имя из профиля; гость → присланное. Общий фильтр (NFC/невидимки/XSS/
+      // длина — shared/names) → дефолт по месту → дедуп в комнате.
+      const sessionUser = (socket.data.user ?? null) as SessionUser | null;
+      const base = normalizeName(sessionUser?.displayName ?? rawName) || `Player ${seat + 1}`;
       const name = dedupeName(
         room.seats.map((s) => s.name),
         base,
       );
-      room.seats.push({ socketId: socket.id, playerId, name, isHost });
+      room.seats.push({
+        socketId: socket.id,
+        playerId,
+        name,
+        isHost,
+        userId: sessionUser?.userId ?? null,
+      });
       sockets.set(socket.id, { roomId: room.id, playerId });
       socket.join(room.id);
       return { roomId: room.id, playerId, seat, isHost };
