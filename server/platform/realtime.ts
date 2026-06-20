@@ -330,19 +330,45 @@ export function attachRealtime(
     });
 
     // Вход в ОТКРЫТЫЙ/дежурный стол по публичному id из списка (ADR-0017, 2.5.d): БЕЗ кода и БЕЗ
-    // анти-перебора (список публичен — перебирать нечего). Приватные сюда не пускаем (только по коду).
-    // Reclaim/hold на реконнект и предохранитель — d-1b. Гейт ника — как в create/join.
+    // анти-перебора (список публичен). Приватные сюда не пускаем (только по коду). Reclaim ИДУЩЕЙ партии
+    // при реконнекте — ниже. Лобби-hold/предохранитель залипших — e (анти-абьюз). Гейт ника — как в create.
     socket.on(MSG.joinOpen, (req: JoinOpenRequest) => {
       const parsed = joinOpenReqSchema.safeParse(req);
       if (!parsed.success) {
         socket.emit(MSG.notFound, { roomId: '' }); // кривой запрос — как «не найдено»
         return;
       }
+      const { tableId, name, playerId } = parsed.data;
+      const room = rooms.get(tableId);
+
+      // RECLAIM при реконнекте в ИДУЩУЮ партию открытого/дежурного стола (ADR-0016/0010): вернувшийся
+      // назвал playerId → возвращаем в держимое место и досылаем state. Гейт по `room.game` (как в join):
+      // лобби места не держит (fresh-join). Полный reconnect-токен на место — 2.4.c.
+      const reclaim =
+        room && room.visibility !== 'private' && room.game
+          ? findReclaimSeat(room, playerId)
+          : undefined;
+      if (room && reclaim) {
+        reclaim.socketId = socket.id; // перепривязка на новый сокет (старый умрёт по ping-timeout)
+        room.emptiedAt = null; // кто-то вернулся — снимаем grace-таймер сноса партии
+        sockets.set(socket.id, { roomId: room.id, playerId: reclaim.playerId });
+        socket.join(room.id);
+        socket.emit(MSG.joined, {
+          roomId: room.id,
+          playerId: reclaim.playerId,
+          seat: room.seats.indexOf(reclaim),
+          isHost: reclaim.isHost,
+        } satisfies JoinedPayload);
+        socket.emit(MSG.state, snapshot(room, [])); // партия идёт — несём state.dice (e-1)
+        broadcastPresence(room); // вернулся — оставшиеся снимут баннер «соперник вышел» (2.2.d-2)
+        log.info({ roomId: room.id, playerId: reclaim.playerId }, 'player reclaimed open seat');
+        return;
+      }
+
       if (needsNickname()) return; // залогиненный без ника — сперва онбординг (2.3.e-2b)
-      const room = rooms.get(parsed.data.tableId);
       // Нет такого / приватная — «не найдено» (приватные комнаты через публичный список НЕ светим).
       if (!room || room.visibility === 'private') {
-        socket.emit(MSG.notFound, { roomId: parsed.data.tableId });
+        socket.emit(MSG.notFound, { roomId: tableId });
         return;
       }
       if (room.game) {
@@ -353,7 +379,7 @@ export function attachRealtime(
         socket.emit(MSG.full, { roomId: room.id });
         return;
       }
-      const joined = addSeat(room, parsed.data.name, false); // открытый/дежурный стол без хозяина (ready-up)
+      const joined = addSeat(room, name, false); // открытый/дежурный стол без хозяина (ready-up)
       socket.emit(MSG.joined, joined);
       broadcastLobby(room);
       log.info(
