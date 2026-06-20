@@ -13,8 +13,23 @@ const GOOGLE_LOGIN_URL = `${import.meta.env.DEV ? 'http://localhost:3001' : ''}/
 
 export function MenuScreen() {
   const setView = useUiStore((s) => s.setView);
+  const setNicknameReturn = useUiStore((s) => s.setNicknameReturn);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+
+  // «Play online» (2.3.e-3): залогиненному без ника — сперва онбординг (вернёмся в online); иначе сразу.
+  const playOnline = () => {
+    if (user && !user.nickname) {
+      setNicknameReturn('online');
+      setView('nickname');
+    } else {
+      setView('online');
+    }
+  };
+  const changeNickname = () => {
+    setNicknameReturn('menu');
+    setView('nickname');
+  };
 
   return (
     <Screen className="menu">
@@ -34,7 +49,7 @@ export function MenuScreen() {
             <span className="mode-btn__title">Play local</span>
             <span className="mode-btn__desc">Hotseat or solo on this device</span>
           </button>
-          <button type="button" className="mode-btn" onClick={() => setView('online')}>
+          <button type="button" className="mode-btn" onClick={playOnline}>
             <span className="mode-btn__title">Play online</span>
             <span className="mode-btn__desc">With friends across devices</span>
           </button>
@@ -44,8 +59,17 @@ export function MenuScreen() {
           {user ? (
             <>
               <p className="menu__account-note">
-                Signed in as <b>{user.displayName}</b>
+                Signed in as <b>{user.nickname ?? user.displayName}</b>
+                {user.nickname && (
+                  <>
+                    {' · '}
+                    <button type="button" className="menu__linkbtn" onClick={changeNickname}>
+                      Change
+                    </button>
+                  </>
+                )}
               </p>
+              {!user.nickname && <p className="menu__hint">Pick a nickname to play online.</p>}
               <button type="button" className="menu__signin" onClick={() => void logout()}>
                 Sign out
               </button>

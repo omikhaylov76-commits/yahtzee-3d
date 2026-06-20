@@ -7,6 +7,7 @@ import { SoundControl } from './ui/components/SoundControl';
 import { Celebration } from './ui/components/Celebration';
 import { LoadingScreen } from './ui/screens/LoadingScreen';
 import { MenuScreen } from './ui/screens/MenuScreen';
+import { NicknameScreen } from './ui/screens/NicknameScreen';
 import { OnlineScreen } from './ui/screens/OnlineScreen';
 import { LobbyScreen } from './ui/screens/LobbyScreen';
 import { StartScreen } from './ui/screens/StartScreen';
@@ -71,6 +72,8 @@ export function App() {
     )
   ) : mode === 'online' && lobby ? (
     <LobbyScreen />
+  ) : view === 'nickname' ? (
+    <NicknameScreen />
   ) : view === 'localSetup' ? (
     <StartScreen />
   ) : view === 'online' ? (
