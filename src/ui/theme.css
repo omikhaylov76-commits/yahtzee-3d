@@ -598,6 +598,55 @@ body {
   margin: 2px 0 0;
 }
 
+/* Кабинет игрока (2.3.e-5): профиль-шапка, аватар, секции. */
+.cabinet__profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.cabinet__avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+}
+.cabinet__avatar--initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--ice);
+}
+.cabinet__name {
+  font-size: 26px;
+  margin: 2px 0 0;
+}
+.cabinet__sub {
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.cabinet__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cabinet__section-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.cabinet__signout {
+  align-self: flex-start;
+}
+
 /* Кнопка «назад в меню» (setup/онлайн → меню) */
 .back-link {
   align-self: flex-start;

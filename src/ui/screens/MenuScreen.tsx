@@ -26,11 +26,6 @@ export function MenuScreen() {
       setView('online');
     }
   };
-  const changeNickname = () => {
-    setNicknameReturn('menu');
-    setView('nickname');
-  };
-
   return (
     <Screen className="menu">
       <div className="menu__inner">
@@ -59,15 +54,10 @@ export function MenuScreen() {
           {user ? (
             <>
               <p className="menu__account-note">
-                Signed in as <b>{user.nickname ?? user.displayName}</b>
-                {user.nickname && (
-                  <>
-                    {' · '}
-                    <button type="button" className="menu__linkbtn" onClick={changeNickname}>
-                      Change
-                    </button>
-                  </>
-                )}
+                Signed in as{' '}
+                <button type="button" className="menu__linkbtn" onClick={() => setView('profile')}>
+                  {user.nickname ?? user.displayName}
+                </button>
               </p>
               {!user.nickname && <p className="menu__hint">Pick a nickname to play online.</p>}
               <button type="button" className="menu__signin" onClick={() => void logout()}>

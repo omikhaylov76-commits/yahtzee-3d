@@ -7,7 +7,7 @@ import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import { roomCodeFromUrl } from '../platform/deepLink';
 
-export type View = 'menu' | 'localSetup' | 'online' | 'nickname';
+export type View = 'menu' | 'localSetup' | 'online' | 'nickname' | 'profile';
 
 export interface UiState {
   /** Текущий вид, когда партии нет (есть партия — роутер показывает игру/итоги). */
