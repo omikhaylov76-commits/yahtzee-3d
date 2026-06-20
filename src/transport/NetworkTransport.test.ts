@@ -230,4 +230,35 @@ describe('NetworkTransport — denied и reset', () => {
     expect(t.getState()).toBeNull();
     expect(got).toEqual([{ state: null, events: [] }]);
   });
+
+  it('room:reset гасит состояние и уведомляет (null, []), НЕ роняя сокет (реванш)', () => {
+    const s = new FakeSocket();
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
+    s.server(MSG.joined, { roomId: 'dev', playerId: 'seat-abc', seat: 0, isHost: false });
+    s.server(MSG.state, snapshot(3));
+    const got: { state: GameState | null; events: DomainEvent[] }[] = [];
+    t.subscribe((state, events) => got.push({ state, events }));
+
+    s.server(MSG.reset, { roomId: 'dev' });
+
+    expect(got).toEqual([{ state: null, events: [] }]); // состояние игры погашено
+    expect(t.getState()).toBeNull();
+    expect(s.disconnected).toBe(false); // сокет жив — это НЕ reset() сессии
+    expect(t.getPlayerId()).toBe('seat-abc'); // место/playerId сохранены (реванш тем же составом)
+  });
+
+  it('после room:reset новая партия (версия снова с 1) принимается, не отбрасывается', () => {
+    const s = new FakeSocket();
+    const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
+    s.server(MSG.state, snapshot(2)); // партия 1 дошла до версии 2
+    s.server(MSG.reset, { roomId: 'dev' }); // стол вернулся в лобби — версия обнулена
+    const got: (GameState | null)[] = [];
+    t.subscribe((state) => got.push(state));
+
+    s.server(MSG.state, snapshot(1)); // новая партия начинает версию заново — должна приняться
+
+    expect(got).toHaveLength(1);
+    expect(got[0]).not.toBeNull();
+    expect(t.getState()).not.toBeNull();
+  });
 });

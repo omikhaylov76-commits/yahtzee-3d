@@ -15,7 +15,7 @@ import {
 } from '../../shared/protocol';
 import type { Action, DomainEvent, GameState, PublicGameState } from '../core';
 import type { Transport, TransportListener } from './Transport';
-import { deniedSchema, joinedSchema, stateSchema } from '../../shared/schemas';
+import { deniedSchema, joinedSchema, resetSchema, stateSchema } from '../../shared/schemas';
 
 /**
  * Узкий контракт сокета, нужный транспорту. Его удовлетворяет `Socket` из `socket.io-client`
@@ -80,6 +80,11 @@ export class NetworkTransport implements Transport {
       if (!v.success) return;
       this.playerId = v.data.playerId;
       this.code = v.data.roomId; // для create узнаём выданный код; для join — подтверждаем нормализованный
+    });
+    // Стол вернулся в лобби после завершившейся партии (ADR-0016, реванш, open/persistent): гасим
+    // состояние игры, НЕ роняя сокет/playerId/код — следом придёт room:lobby и роутер покажет лобби (2.5.a-2).
+    socket.on(MSG.reset, (p) => {
+      if (resetSchema.safeParse(p).success) this.onReset();
     });
     // Вход в комнату — на КАЖДЫЙ (ре)коннект сокета (2.1.e-2). socket.io сам переподключается после
     // блипа сети; первый раз создаём/входим по intent, на реконнекте называем playerId+код (reclaim).
@@ -166,6 +171,20 @@ export class NetworkTransport implements Transport {
     this.stateVersion = payload.stateVersion;
     this.pendingActionId = null; // пришло авторитетное состояние — действие разрешилось
     this.emit(this.getState(), payload.events);
+  }
+
+  /**
+   * Стол вернулся в лобби после партии (ADR-0016, реванш) — гасим состояние игры, НЕ роняя сокет/
+   * playerId/код (это НЕ `reset()` сессии — мы остаёмся в комнате). Версию обнуляем, чтобы СЛЕДУЮЩАЯ
+   * партия (она начнётся снова с версии 1) не была отброшена как устаревшая в `onState`. Подписчикам —
+   * (null, []) → стор выставит `state=null`, роутер уведёт с экрана победителя в лобби.
+   */
+  private onReset(): void {
+    if (this.disposed) return;
+    this.publicState = null;
+    this.stateVersion = 0;
+    this.pendingActionId = null;
+    this.emit(null, []);
   }
 
   private onDenied(payload: DeniedPayload): void {

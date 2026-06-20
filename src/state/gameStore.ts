@@ -226,6 +226,10 @@ export function createGameStore(
           ),
         onLobby: (lobby) => store.setState({ lobby }),
         onPresence: (connected) => store.setState({ connectedIds: connected }), // 2.2.d-2: «остался один»
+        // Стол вернулся в лобби после партии (ADR-0016, реванш): из игры обратно в ожидание; чистим
+        // присутствие (иначе ложный «opponent left» мигнёт в следующей партии). Состояние игры гасит
+        // транспорт (emit null) → подписка выставит state=null; роутер покажет лобби (2.5.a-2).
+        onReset: () => store.setState({ onlineStatus: 'waiting', connectedIds: null }),
         onJoined: (j) =>
           store.setState({
             myPlayerId: j.playerId,

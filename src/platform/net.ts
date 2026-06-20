@@ -57,6 +57,8 @@ export interface OnlineCallbacks {
   onJoined: (joined: JoinedPayload) => void;
   /** Присутствие в идущей партии (2.2.d-2): playerId с живым сокетом. Оставшийся один → баннер «opponent left». */
   onPresence: (connected: string[]) => void;
+  /** Стол вернулся в лобби после партии (ADR-0016, реванш, open/persistent): UI из игры обратно в лобби. */
+  onReset: () => void;
   /** Залогинен без ника (2.3.e-2b): сервер отказал во входе в комнату → увести на онбординг ника. */
   onNicknameRequired: () => void;
 }
@@ -123,6 +125,11 @@ export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): 
   socket.on(MSG.kicked, () => closeWith('kicked')); // хозяин выгнал — терминально (2.2.c-1)
   socket.on(MSG.state, () => {
     if (!terminal) cb.onStatus('playing'); // пришло авторитетное состояние — партия пошла
+  });
+  // Стол вернулся в лобби после партии (ADR-0016, реванш): из 'playing' обратно в ожидание лобби.
+  // Транспорт на том же событии гасит состояние игры (2.5.a-2); стор чистит присутствие.
+  socket.on(MSG.reset, () => {
+    if (!terminal) cb.onReset();
   });
   socket.on(MSG.presence, (p) => {
     // Присутствие идущей партии (2.2.d-2): кто ещё на связи. Оставшийся один → баннер (логика — в сторе).
