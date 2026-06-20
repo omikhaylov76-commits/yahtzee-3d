@@ -15,6 +15,14 @@ export interface AuthUser {
 /** Причина отказа смены ника (2.3.e-3) — для текста в UI. */
 export type NickError = 'invalid' | 'reserved' | 'taken' | 'rate' | 'auth' | 'net';
 
+/** Личная статистика игрока (2.3.e-5b) — форма ответа `/auth/stats` (зеркало серверного PlayerStats). */
+export interface PlayerStats {
+  gamesPlayed: number;
+  wins: number;
+  winRate: number | null;
+  bestTotal: number | null;
+}
+
 interface AuthState {
   user: AuthUser | null;
   loaded: boolean; // прошёл ли первый `/auth/me` (чтобы не мигать «войти» до ответа)
@@ -70,3 +78,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: null });
   },
 }));
+
+/** Запросить личную статистику (2.3.e-5b). Чистый fetch — СОСТОЯНИЕ держит экран кабинета, не стор. */
+export async function fetchPlayerStats(): Promise<PlayerStats> {
+  const r = await fetch(`${AUTH_BASE}/auth/stats`, { credentials: 'include' });
+  if (!r.ok) throw new Error(`stats ${r.status}`);
+  return (await r.json()) as PlayerStats;
+}

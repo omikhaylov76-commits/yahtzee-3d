@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { Screen } from '../components/Screen';
 import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
 import { NicknameForm } from '../components/NicknameForm';
 import { useUiStore } from '../../state/uiStore';
-import { useAuthStore } from '../../state/authStore';
+import { fetchPlayerStats, useAuthStore, type PlayerStats } from '../../state/authStore';
+import { soloRecordStorage } from '../../storage/soloRecordStorage';
 
 /** Инициалы для запасного аватара, когда нет картинки из Google. */
 function initials(name: string): string {
@@ -12,13 +14,34 @@ function initials(name: string): string {
 }
 
 /**
- * Кабинет игрока (2.3.e-5a): профиль (аватар + ник + Google-имя) и inline-смена ника (та же
- * `NicknameForm`) + выход. Статистика и соло-рекорд — e-5b. Доступен из меню для залогиненного.
+ * Кабинет игрока (2.3.e-5): профиль (аватар + ник + Google-имя), статистика (онлайн из `/auth/stats` +
+ * локальный соло-рекорд устройства), inline-смена ника (та же `NicknameForm`) и выход. Доступен из меню
+ * залогиненному. Статистика — ЛОКАЛЬНОЕ состояние экрана (не глобалим в стор): тянем при открытии.
  */
 export function CabinetScreen() {
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const setView = useUiStore((s) => s.setView);
+
+  // Хуки — ДО любого раннего return (правила хуков). Тянем статистику один раз при открытии кабинета.
+  const [stats, setStats] = useState<PlayerStats | null>(null);
+  const [statsState, setStatsState] = useState<'loading' | 'ready' | 'error'>('loading');
+  useEffect(() => {
+    let alive = true;
+    fetchPlayerStats()
+      .then((s) => {
+        if (alive) {
+          setStats(s);
+          setStatsState('ready');
+        }
+      })
+      .catch(() => {
+        if (alive) setStatsState('error');
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Без сессии в кабинете делать нечего (роутер сюда обычно не пускает) — даём уйти в меню.
   if (!user) {
@@ -36,6 +59,7 @@ export function CabinetScreen() {
 
   const display = user.nickname ?? user.displayName;
   const hasNick = !!user.nickname;
+  const soloBest = soloRecordStorage.load();
 
   return (
     <Screen className="coming">
@@ -63,6 +87,39 @@ export function CabinetScreen() {
             {hasNick && <p className="cabinet__sub">{user.displayName}</p>}
           </div>
         </header>
+
+        <section className="cabinet__section">
+          <h2 className="cabinet__section-title">Online stats</h2>
+          {statsState === 'loading' && <p className="cabinet__muted">Loading…</p>}
+          {statsState === 'error' && (
+            <p className="cabinet__muted">Couldn’t load stats right now.</p>
+          )}
+          {statsState === 'ready' && stats && (
+            <dl className="stats-grid">
+              <div className="stat">
+                <dt>Played</dt>
+                <dd>{stats.gamesPlayed}</dd>
+              </div>
+              <div className="stat">
+                <dt>Wins</dt>
+                <dd>{stats.wins}</dd>
+              </div>
+              <div className="stat">
+                <dt>Win rate</dt>
+                <dd>{stats.winRate === null ? '—' : `${Math.round(stats.winRate * 100)}%`}</dd>
+              </div>
+              <div className="stat">
+                <dt>Best</dt>
+                <dd>{stats.bestTotal ?? '—'}</dd>
+              </div>
+            </dl>
+          )}
+          {soloBest !== null && (
+            <p className="cabinet__muted">
+              Best solo (this device): <b>{soloBest}</b>
+            </p>
+          )}
+        </section>
 
         <section className="cabinet__section">
           <h2 className="cabinet__section-title">
