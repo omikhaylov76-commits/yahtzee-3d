@@ -48,7 +48,7 @@ if (authEnabled) {
 }
 
 // Realtime поверх http-сервера fastify (2.0.c→2.1.b): рукопожатие + авторитетный игровой цикл.
-const { getStatus } = attachRealtime(
+const { getStatus, isPlayerActive, forgetUser } = attachRealtime(
   app.server,
   app.log,
   CLIENT_ORIGIN,
@@ -70,6 +70,7 @@ if (authEnabled) {
       clientSecret: GOOGLE_CLIENT_SECRET!,
       redirectUri: GOOGLE_REDIRECT_URI!,
     }),
+    { isPlayerActive, forgetUser },
   );
   app.log.info('google auth enabled');
 } else {

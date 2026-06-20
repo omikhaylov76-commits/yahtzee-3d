@@ -11,6 +11,7 @@ import { findOrCreateUser, getUserById, setNickname, type PlatformUser } from '.
 import { SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifySession } from './session';
 import { nicknameBodySchema } from '../../../shared/schemas';
 import { getPlayerStats } from '../stats/playerStats';
+import { deleteAccount } from './deleteAccount';
 
 const STATE_TTL_MS = 10 * 60_000;
 
@@ -49,7 +50,11 @@ function allowNickChange(userId: string): boolean {
   return true;
 }
 
-export function registerAuth(app: FastifyInstance, provider: AuthProvider): void {
+export function registerAuth(
+  app: FastifyInstance,
+  provider: AuthProvider,
+  realtime: { isPlayerActive: (userId: string) => boolean; forgetUser: (userId: string) => void },
+): void {
   // state → expiresAt (CSRF; одноразовый, с TTL). Истёкшие подметаем лениво на каждом start.
   const states = new Map<string, number>();
   const isProd = process.env.NODE_ENV === 'production';
@@ -129,6 +134,18 @@ export function registerAuth(app: FastifyInstance, provider: AuthProvider): void
     const user = await currentUser(req, reply);
     if (!user) return reply.code(401).send({ error: 'unauthorized' });
     return getPlayerStats(user.id);
+  });
+
+  // Удаление аккаунта (2.3.e-6): НЕОБРАТИМО. userId — из сессии; запрет пока в живой игре (isPlayerActive);
+  // tombstone-транзакция + forgetUser (рвём сокеты/обезличиваем места — фикс гонки C1/M3) + чистим cookie.
+  app.delete('/auth/account', async (req, reply) => {
+    const user = await currentUser(req, reply);
+    if (!user) return reply.code(401).send({ error: 'unauthorized' });
+    if (realtime.isPlayerActive(user.id)) return reply.code(409).send({ error: 'in_game' });
+    await deleteAccount(user.id);
+    realtime.forgetUser(user.id);
+    reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    return { ok: true };
   });
 
   // Выход — чистим cookie сессии.

@@ -39,6 +39,7 @@ import {
 import { generateUniqueCode, isValidCode, normalizeCode } from './codes';
 import { randomSeed, rollDiceValues } from './rng';
 import type { SessionUser } from './auth/sessionResolver';
+import { DELETED_PLAYER_NAME } from '../../shared/nickname';
 import {
   actionMsgSchema,
   createReqSchema,
@@ -77,7 +78,12 @@ export function attachRealtime(
   sessionResolver?: (cookieHeader: string | undefined) => Promise<SessionUser | null>,
   // Запись итога завершённой партии в БД (2.3.d-2); инъекция (БД-слой ленив). Не передан → не пишем.
   recordMatch?: (rows: MatchRows) => Promise<string>,
-): { io: Server; getStatus: () => StatusSnapshot } {
+): {
+  io: Server;
+  getStatus: () => StatusSnapshot;
+  isPlayerActive: (userId: string) => boolean;
+  forgetUser: (userId: string) => void;
+} {
   const io = new Server(httpServer, {
     cors: { origin: clientOrigin, credentials: true },
     maxHttpBufferSize: MAX_MSG_BYTES,
@@ -495,5 +501,37 @@ export function attachRealtime(
     return { connections, rooms: rooms.size, inLobby, inGame, playersOnline };
   }
 
-  return { io, getStatus };
+  /**
+   * Активен ли игрок СЕЙЧАС (2.3.e-6): есть место с его `userId` и ЖИВЫМ сокетом. Гейт удаления аккаунта.
+   * По ЖИВОМУ сокету (не по держимому grace-месту) — чтобы не блокировать ушедшего 2-3 мин (аудит M1) и
+   * сузить окно гонки удаления.
+   */
+  function isPlayerActive(userId: string): boolean {
+    for (const room of rooms.values()) {
+      if (room.seats.some((s) => s.userId === userId && s.socketId !== null)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * «Забыть» удалённый аккаунт (2.3.e-6, фикс C1/M3): рвём ВСЕ его сокеты (форс-реконнект → по новому
+   * tokenVersion станут гостями) и обезличиваем любые его места (`userId=null`, имя → «Deleted player»),
+   * чтобы запись итога ПОСЛЕ удаления не воскресила PID/ник. Зовётся ПОСЛЕ deleteAccount.
+   */
+  function forgetUser(userId: string): void {
+    const drop = [...io.sockets.sockets.values()].filter(
+      (s) => ((s.data.user ?? null) as SessionUser | null)?.userId === userId,
+    );
+    for (const s of drop) s.disconnect(true);
+    for (const room of rooms.values()) {
+      for (const seat of room.seats) {
+        if (seat.userId === userId) {
+          seat.userId = null;
+          seat.name = DELETED_PLAYER_NAME;
+        }
+      }
+    }
+  }
+
+  return { io, getStatus, isPlayerActive, forgetUser };
 }

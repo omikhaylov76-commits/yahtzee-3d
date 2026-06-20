@@ -11,6 +11,9 @@ import { MAX_NAME_LEN, normalizeName } from './names';
 /** Минимальная длина ника (кодпойнтов) после нормализации. */
 export const MIN_NICKNAME_LEN = 2;
 
+/** Имя удалённого аккаунта (2.3.e-6): показывается вместо ника/имени; зарезервировано (см. ниже). */
+export const DELETED_PLAYER_NAME = 'Deleted player';
+
 /**
  * Свёрнутый ключ ника для уникальности БЕЗ учёта регистра. Локаль-ИНВАРИАНТНЫЙ `toLowerCase` (НЕ
  * `toLocaleLowerCase`: турецкие i/İ дали бы разный ключ в разных процессах/машинах — ADR-0015 M2).
@@ -34,7 +37,7 @@ export function isValidNickname(raw: string | undefined): boolean {
  * (та же свёртка `nicknameKey`). «deleted player» — подставляется при удалении аккаунта (нельзя выдать
  * себя за удалённого); «player N» — паттерн дефолтных имён мест гостей (нельзя слиться с ними).
  */
-const RESERVED_EXACT = new Set(['deleted player']);
+const RESERVED_EXACT = new Set([nicknameKey(DELETED_PLAYER_NAME)]);
 const RESERVED_PATTERN = /^player \d+$/;
 
 /** Принимает уже свёрнутый ключ (`nicknameKey(raw)`), не сырой ввод. */
