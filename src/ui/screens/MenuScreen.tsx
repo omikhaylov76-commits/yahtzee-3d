@@ -1,6 +1,7 @@
 import { Screen } from '../components/Screen';
 import { Eyebrow } from '../components/Eyebrow';
 import { useUiStore } from '../../state/uiStore';
+import { useAuthStore } from '../../state/authStore';
 
 /**
  * Точка входа (2.L.a, ADR-0014): выбор режима — локально (hotseat/соло) или по сети.
@@ -12,6 +13,8 @@ const GOOGLE_LOGIN_URL = `${import.meta.env.DEV ? 'http://localhost:3001' : ''}/
 
 export function MenuScreen() {
   const setView = useUiStore((s) => s.setView);
+  const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
 
   return (
     <Screen className="menu">
@@ -38,10 +41,25 @@ export function MenuScreen() {
         </nav>
 
         <div className="menu__account">
-          <a className="menu__signin" href={GOOGLE_LOGIN_URL}>
-            Sign in with Google
-          </a>
-          <p className="menu__account-note">Optional — saves your stats &amp; leaderboard later.</p>
+          {user ? (
+            <>
+              <p className="menu__account-note">
+                Signed in as <b>{user.displayName}</b>
+              </p>
+              <button type="button" className="menu__signin" onClick={() => void logout()}>
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <a className="menu__signin" href={GOOGLE_LOGIN_URL}>
+                Sign in with Google
+              </a>
+              <p className="menu__account-note">
+                Optional — saves your stats &amp; leaderboard later.
+              </p>
+            </>
+          )}
         </div>
       </div>
     </Screen>

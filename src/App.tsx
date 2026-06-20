@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from './state/gameStore';
 import { useUiStore } from './state/uiStore';
+import { useAuthStore } from './state/authStore';
 import { eventToSound, soundEngine } from './sound';
 import { SoundControl } from './ui/components/SoundControl';
 import { Celebration } from './ui/components/Celebration';
@@ -46,6 +47,12 @@ export function App() {
     window.addEventListener('pointerdown', unlock, { once: true });
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
+
+  // Кто залогинен (2.3.c-2): один раз спрашиваем /auth/me (cookie сессии httpOnly — JS её не читает).
+  const fetchMe = useAuthStore((s) => s.fetchMe);
+  useEffect(() => {
+    void fetchMe();
+  }, [fetchMe]);
 
   // Состояние «загрузка»: лоадер до первого кадра (в F5+ — реальная загрузка ассетов).
   const [ready, setReady] = useState(false);
