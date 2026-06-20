@@ -4,6 +4,7 @@
  * realtime.ts; авторитетная игровая логика партии — в rooms.ts. Тот же шов «чистое ↔ сокеты»,
  * что у rooms.ts/realtime.ts.
  */
+import { normalizeName } from '../../shared/names';
 import type { LobbyPayload } from '../../shared/protocol';
 import type { RoomState } from './rooms';
 
@@ -97,4 +98,17 @@ export function dedupeName(existing: string[], name: string): string {
     if (!taken.has(candidate.toLocaleLowerCase())) return candidate;
   }
   return name; // недостижимо (принцип Дирихле) — страховка для типобезопасности
+}
+
+/**
+ * Имя места в комнате (2.3.e-2b, ADR-0015): залогиненный играет под своим уникальным НИКОМ (обязателен
+ * по гейту входа), гость — под введённым именем; пусто → дефолт «Player N». Чистая (тестируема). Общий
+ * фильтр (NFC/невидимки/XSS/длина) — внутри `normalizeName`; дедуп одинаковых в комнате — `dedupeName`.
+ */
+export function seatName(
+  sessionUser: { nickname: string | null } | null,
+  rawName: string | undefined,
+  seat: number,
+): string {
+  return normalizeName(sessionUser?.nickname ?? rawName) || `Player ${seat + 1}`;
 }

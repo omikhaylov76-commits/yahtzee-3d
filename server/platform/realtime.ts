@@ -25,7 +25,6 @@ import {
   type PresencePayload,
   type StatePayload,
 } from '../../shared/protocol';
-import { normalizeName } from '../../shared/names';
 import { applyNetworkAction, startGame, type YahtzeeModule } from './rooms';
 import {
   canStart,
@@ -34,6 +33,7 @@ import {
   findReclaimSeat,
   lobbySnapshot,
   ROOM_CAPACITY,
+  seatName,
   type Room,
 } from './seating';
 import { generateUniqueCode, isValidCode, normalizeCode } from './codes';
@@ -202,10 +202,10 @@ export function attachRealtime(
     function addSeat(room: Room, rawName: string | undefined, isHost: boolean): JoinedPayload {
       const seat = room.seats.length;
       const playerId = `seat-${randomUUID().slice(0, 8)}`;
-      // Залогиненный (2.3.c-3) → имя из профиля; гость → присланное. Общий фильтр (NFC/невидимки/XSS/
-      // длина — shared/names) → дефолт по месту → дедуп в комнате.
+      // Залогиненный (ADR-0015) → его уникальный НИК; гость → присланное имя (seatName: общий фильтр
+      // NFC/невидимки/XSS/длина внутри) → дефолт по месту → дедуп одинаковых в комнате.
       const sessionUser = (socket.data.user ?? null) as SessionUser | null;
-      const base = normalizeName(sessionUser?.displayName ?? rawName) || `Player ${seat + 1}`;
+      const base = seatName(sessionUser, rawName, seat);
       const name = dedupeName(
         room.seats.map((s) => s.name),
         base,
@@ -222,9 +222,24 @@ export function attachRealtime(
       return { roomId: room.id, playerId, seat, isHost };
     }
 
+    /**
+     * Гейт ника (2.3.e-2b, ADR-0015): залогиненного БЕЗ ника не пускаем в сетевую игру (создать/войти) —
+     * авторитетная страховка к UI-онбордингу (e-3). Гость (user=null) проходит. Проверка по СВОЕМУ
+     * аккаунту (без оракула о комнате) → зовём до room-lookup.
+     */
+    function needsNickname(): boolean {
+      const u = (socket.data.user ?? null) as SessionUser | null;
+      if (u && !u.nickname) {
+        socket.emit(MSG.nicknameRequired);
+        return true;
+      }
+      return false;
+    }
+
     socket.on(MSG.create, (req: CreateRequest) => {
       const parsed = createReqSchema.safeParse(req);
       if (!parsed.success) return; // кривой запрос (2.3.c-4) — игнор
+      if (needsNickname()) return; // залогиненный без ника — сперва онбординг (2.3.e-2b)
       if (roomsCreated >= MAX_CREATE_PER_SOCKET || rooms.size >= MAX_ROOMS) {
         log.warn({ rooms: rooms.size, perSocket: roomsCreated }, 'refusing create (cap reached)');
         socket.emit(MSG.full, { roomId: '' }); // перегрузка — переиспользуем «занято» (UI — 2.2.a-3)
@@ -296,6 +311,8 @@ export function attachRealtime(
         log.info({ roomId: code, playerId: reclaim.playerId }, 'player reclaimed seat');
         return;
       }
+
+      if (needsNickname()) return; // залогиненный без ника — сперва онбординг (2.3.e-2b); reclaim выше не гейтим
 
       // Любой join, не приведший к посадке/reclaim, считаем неудачей перебора (не даём оракул: ответы
       // not-found / already-started / full одинаково двигают счётчик лока).

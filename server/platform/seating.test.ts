@@ -12,6 +12,7 @@ import {
   lobbySnapshot,
   MIN_TO_START,
   ROOM_CAPACITY,
+  seatName,
   type Room,
   type Seat,
 } from './seating';
@@ -124,5 +125,24 @@ describe('dedupeName', () => {
 
   it('дефолтные имена «Player N» уже уникальны по месту', () => {
     expect(dedupeName(['Player 1'], 'Player 2')).toBe('Player 2');
+  });
+});
+
+describe('seatName', () => {
+  it('залогиненный — под своим ником (ник важнее присланного имени)', () => {
+    expect(seatName({ nickname: 'Neo' }, 'spoofed', 0)).toBe('Neo');
+  });
+
+  it('гость — под присланным именем', () => {
+    expect(seatName(null, 'Trinity', 1)).toBe('Trinity');
+  });
+
+  it('пусто/невидимки → дефолт «Player N» по месту', () => {
+    expect(seatName(null, '   ', 2)).toBe('Player 3');
+    expect(seatName({ nickname: null }, undefined, 0)).toBe('Player 1');
+  });
+
+  it('имя чистится общим normalizeName (XSS/невидимки)', () => {
+    expect(seatName(null, '<b>Hi', 0)).toBe('bHi');
   });
 });

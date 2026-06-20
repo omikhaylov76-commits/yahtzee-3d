@@ -33,6 +33,7 @@ export const MSG = {
   alreadyStarted: 'room:already-started',
   kicked: 'room:kicked', // тебя выгнал хозяин (2.2.c-1) — unicast жертве
   presence: 'room:presence', // кто на живом сокете в идущей партии (2.2.d-2): оставшийся один → баннер
+  nicknameRequired: 'room:nickname-required', // залогиненный без ника просит вход → нужен онбординг (2.3.e-2b)
   state: 'state',
   denied: 'denied',
 } as const;

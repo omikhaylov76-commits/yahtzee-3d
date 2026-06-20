@@ -9,6 +9,8 @@ import { getUserById } from './users';
 export interface SessionUser {
   userId: string;
   displayName: string;
+  /** Игровой ник (ADR-0015): null = ещё не выбран. В игре/комнате игрок выступает под ником (2.3.e-2b). */
+  nickname: string | null;
 }
 
 /** Достать значение cookie по имени из сырого заголовка `Cookie` (socket.handshake не парсит его). */
@@ -30,5 +32,5 @@ export async function resolveSessionUser(
   if (!session) return null;
   const user = await getUserById(session.userId);
   if (!user || user.tokenVersion !== session.tokenVersion) return null; // отозвана/удалён
-  return { userId: user.id, displayName: user.displayName };
+  return { userId: user.id, displayName: user.displayName, nickname: user.nickname };
 }
