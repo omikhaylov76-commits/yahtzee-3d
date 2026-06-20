@@ -13,24 +13,46 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 /** Игрок-аккаунт. Создаётся при первом входе через провайдера (2.3.b). */
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  displayName: text('display_name').notNull(),
-  avatarUrl: text('avatar_url'),
-  /** Версия токена сессии: инкремент отзывает ВСЕ выданные сессии (2.3.c). */
-  tokenVersion: integer('token_version').notNull().default(0),
-  /** Tombstone удаления аккаунта (2.3.e): не NULL → аккаунт удалён, профиль анонимизирован. */
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
-  /** Крючок монетизации (ADR no-pay-to-win): тариф. Пока всегда 'free'. */
-  tier: text('tier').notNull().default('free'),
-  /** Крючок монетизации: что игроку принадлежит (косметика/права). Пока пусто. */
-  entitlements: jsonb('entitlements').$type<Record<string, unknown>>().notNull().default({}),
-});
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    displayName: text('display_name').notNull(),
+    /**
+     * Игровой ник (ADR-0015): задаёт игрок, показывается в игре/истории/лидерборде. NULL = онбординг
+     * ника не пройден ЛИБО ник освобождён при удалении аккаунта. Уникальность — по `nickname_key` (ниже).
+     */
+    nickname: text('nickname'),
+    /**
+     * Свёрнутый ключ ника для уникальности без учёта регистра/локали (`nicknameKey()` в `shared/nickname`).
+     * Частичный UNIQUE ниже (`WHERE NOT NULL`): несколько NULL не конфликтуют (ник не выбран/освобождён).
+     */
+    nicknameKey: text('nickname_key'),
+    avatarUrl: text('avatar_url'),
+    /** Версия токена сессии: инкремент отзывает ВСЕ выданные сессии (2.3.c). */
+    tokenVersion: integer('token_version').notNull().default(0),
+    /** Tombstone удаления аккаунта (2.3.e): не NULL → аккаунт удалён, профиль анонимизирован. */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    /** Крючок монетизации (ADR no-pay-to-win): тариф. Пока всегда 'free'. */
+    tier: text('tier').notNull().default('free'),
+    /** Крючок монетизации: что игроку принадлежит (косметика/права). Пока пусто. */
+    entitlements: jsonb('entitlements').$type<Record<string, unknown>>().notNull().default({}),
+  },
+  // Глобальная уникальность ника без учёта регистра (ADR-0015). Частичный индекс: NULL-ключи
+  // (ник не выбран / освобождён при удалении) НЕ участвуют в уникальности (несколько NULL не конфликтуют).
+  (t) => [
+    uniqueIndex('users_nickname_key_uq')
+      .on(t.nicknameKey)
+      .where(sql`${t.nicknameKey} IS NOT NULL`),
+  ],
+);
 
 /** Способ входа игрока — привязка к внешнему провайдеру (2.3.b). Один user → много identities. */
 export const identities = pgTable(
@@ -69,9 +91,10 @@ export const matches = pgTable('matches', {
 /**
  * Участник партии — строка на КАЖДОЕ место (2.3.d). `user_id` NULL = СТРОГО гость (аккаунта не было).
  * Аккаунт удаляется tombstone'ом (`users.deleted_at`), НЕ физически, поэтому ON DELETE по умолчанию
- * (NO ACTION): снести user с историей физически = ошибка БД (инвариант целостности истории). В чужой
- * истории удалённого показываем «Deleted player» живым джойном по `users.deleted_at` (2.3.e), `user_id`
- * сохраняется. `display_name` — СНИМОК имени на момент партии (история переживает смену/удаление ника).
+ * (NO ACTION): снести user с историей физически = ошибка БД (инвариант целостности истории). При
+ * удалении аккаунта (2.3.e/ADR-0015) PII затирается ФИЗИЧЕСКИ: `display_name` этих строк → «Deleted
+ * player» (НЕ join на `users.deleted_at`), `user_id` сохраняется (честность рейтинга). `display_name` —
+ * СНИМОК ника на момент партии (история переживает смену ника).
  */
 export const matchPlayers = pgTable(
   'match_players',
