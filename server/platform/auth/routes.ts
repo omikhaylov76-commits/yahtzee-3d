@@ -10,6 +10,7 @@ import type { AuthProvider } from './AuthProvider';
 import { findOrCreateUser, getUserById, setNickname, type PlatformUser } from './users';
 import { SESSION_COOKIE, SESSION_MAX_AGE, signSession, verifySession } from './session';
 import { nicknameBodySchema } from '../../../shared/schemas';
+import { getPlayerStats } from '../stats/playerStats';
 
 const STATE_TTL_MS = 10 * 60_000;
 
@@ -121,6 +122,13 @@ export function registerAuth(app: FastifyInstance, provider: AuthProvider): void
       return reply.code(result.reason === 'taken' ? 409 : 400).send({ error: result.reason });
     }
     return { nickname: result.nickname };
+  });
+
+  // Личная статистика залогиненного (2.3.e-4): агрегат по его match_players. userId — ТОЛЬКО из сессии.
+  app.get('/auth/stats', async (req, reply) => {
+    const user = await currentUser(req, reply);
+    if (!user) return reply.code(401).send({ error: 'unauthorized' });
+    return getPlayerStats(user.id);
   });
 
   // Выход — чистим cookie сессии.
