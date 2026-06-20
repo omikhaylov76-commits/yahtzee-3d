@@ -45,6 +45,8 @@ import {
   joinReqSchema,
   kickReqSchema,
 } from '../../shared/schemas';
+import { rowsForCompletedGame } from './stats/onGameOver';
+import type { MatchRows } from './stats/buildRows';
 
 const DICE_COUNT = 5;
 const MAX_ROOMS = 500; // cap активных комнат на процесс — RAM узкое место (ADR-0009), graceful-отказ
@@ -73,6 +75,8 @@ export function attachRealtime(
   // Опознание залогиненного игрока по cookie сессии (2.3.c-3); инъекция из композиционного корня
   // (БД-слой грузится только когда вход включён). Не передан → все играют гостями.
   sessionResolver?: (cookieHeader: string | undefined) => Promise<SessionUser | null>,
+  // Запись итога завершённой партии в БД (2.3.d-2); инъекция (БД-слой ленив). Не передан → не пишем.
+  recordMatch?: (rows: MatchRows) => Promise<string>,
 ): { io: Server; getStatus: () => StatusSnapshot } {
   const io = new Server(httpServer, {
     cors: { origin: clientOrigin, credentials: true },
@@ -405,6 +409,25 @@ export function attachRealtime(
       }
       // Успех: рассылаем новое авторитетное состояние + события всем в комнате.
       io.to(room.id).emit(MSG.state, snapshot(room, result.events));
+
+      // Запись итога при ЕСТЕСТВЕННОМ завершении партии (2.3.d-2): собрать строки и записать ВНЕ горячего
+      // пути. Не game:over / только гости → rowsForCompletedGame вернёт null. Дубль actionId сюда не доходит
+      // (return по result.duplicate выше) — записи не задвоить. Сбой записи логируем, но НЕ роняем игру
+      // (БД вне realtime-петли, ADR-0009); лог без имён/PII (2.3.d).
+      if (recordMatch && room.game) {
+        const rows = rowsForCompletedGame(
+          result.events,
+          module.getResult(room.game.state),
+          room.seats,
+          module.id,
+          (playerId) => log.warn({ roomId: room.id, playerId }, 'finished-game seat missing'),
+        );
+        if (rows) {
+          recordMatch(rows).catch((err) =>
+            log.error({ err, roomId: room.id }, 'recordMatch failed'),
+          );
+        }
+      }
     });
 
     socket.on('disconnect', () => {

@@ -13,6 +13,7 @@ import { PROTOCOL_VERSION } from '../shared/protocol';
 import { yahtzeeModule } from './games/yahtzee';
 import { attachRealtime } from './platform/realtime';
 import type { SessionUser } from './platform/auth/sessionResolver';
+import type { MatchRows } from './platform/stats/buildRows';
 
 const PORT = Number(process.env.PORT ?? 3001);
 const HOST = process.env.HOST ?? '0.0.0.0'; // Railway требует 0.0.0.0
@@ -39,8 +40,11 @@ const authEnabled = Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_R
 let sessionResolver:
   | ((cookieHeader: string | undefined) => Promise<SessionUser | null>)
   | undefined;
+// Запись итога партии (2.3.d-2) — тоже за БД: грузим лениво вместе с сессиями (та же предпосылка DATABASE_URL).
+let recordMatch: ((rows: MatchRows) => Promise<string>) | undefined;
 if (authEnabled) {
   ({ resolveSessionUser: sessionResolver } = await import('./platform/auth/sessionResolver'));
+  ({ recordMatch } = await import('./platform/stats/record'));
 }
 
 // Realtime поверх http-сервера fastify (2.0.c→2.1.b): рукопожатие + авторитетный игровой цикл.
@@ -50,6 +54,7 @@ const { getStatus } = attachRealtime(
   CLIENT_ORIGIN,
   yahtzeeModule,
   sessionResolver,
+  recordMatch,
 );
 
 // Лёгкий мониторинг (2.P.2): только агрегаты — без кодов комнат и имён (код = пропуск в игру).
