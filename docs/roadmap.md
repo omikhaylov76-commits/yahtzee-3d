@@ -164,12 +164,12 @@ realtime + `NetworkTransport`), потом комнаты с кодами, по�
         (две вкладки/устройства). Обновить `architecture.md` (отклонение «раздельный деплой»→same-origin
         для пилота) + `.env.example`.
 - [ ] **2.3 Авторизация Google + кабинеты** — крупная, под-шаги (раздроблено — это не один коммит):
-  - [ ] 2.3.a **Каркас БД:** `drizzle`+`pg`, схема в `server/platform`, миграции `drizzle-kit`; прогон
+  - [x] 2.3.a **Каркас БД:** `drizzle`+`pg`, схема в `server/platform`, миграции `drizzle-kit`; прогон
         миграций на Railway — явный шаг деплоя (не «при старте»).
-  - [ ] 2.3.b **Google OAuth** (`google-auth-library`): параметр `state` (анти-CSRF), allowlist `redirect_uri`,
+  - [x] 2.3.b **Google OAuth** (`google-auth-library`): параметр `state` (анти-CSRF), allowlist `redirect_uri`,
         проверка id-token (`aud`/`iss`); контракт **`AuthProvider`**; модель «пользователь ↔ привязки»
         (unique `(provider,externalId)`, re-auth для привязки).
-  - [ ] 2.3.c **Сессии** (`jose`): короткий TTL + refresh, фикс. алгоритм, отзыв `tokenVersion`; токен в
+  - [x] 2.3.c **Сессии** (`jose`): короткий TTL + refresh, фикс. алгоритм, отзыв `tokenVersion`; токен в
         WS — в auth-payload, НЕ в query; CORS/cookie/SameSite dev↔prod; **OAuth deep-link** возврат в комнату.
         **Рантайм-валидация схем сетевых сообщений (`zod`, клиент+сервер)** — перенесена сюда из 2.2.b (по
         сети едет токен — цена доверия выше; закрывает хвост 2.1 «клиент принимает state/denied слепым кастом»).
