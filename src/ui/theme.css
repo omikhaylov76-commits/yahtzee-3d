@@ -1980,22 +1980,10 @@ body {
   font-size: 16px;
   color: var(--heading);
 }
-/* Аватар-обёртка: чтобы «надеть» корону на кружок. */
-.lb__ava {
-  position: relative;
-  flex: none;
-}
-/* Корона чемпиона — золотая, крупнее и надета на верх кружка (основание садится на аватар), лёгкий наклон. */
+/* Корона у ника (топ-3) — размер от SVG (14px); металлический отлив задаёт градиент внутри иконки. */
 .lb__crown {
-  position: absolute;
-  top: -12px;
-  left: 50%;
-  width: 24px;
-  height: 24px;
-  transform: translateX(-50%) rotate(-10deg);
-  color: #f5cb5c;
-  filter: drop-shadow(0 0 5px rgba(245, 203, 92, 0.6));
-  pointer-events: none;
+  flex: none;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
 }
 .lb__meta {
   font-size: 11px;

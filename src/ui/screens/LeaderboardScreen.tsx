@@ -4,10 +4,35 @@ import { Button } from '../components/Button';
 import { useUiStore } from '../../state/uiStore';
 import { useLeaderboard } from '../../state/leaderboard';
 
+/** Металлы подиума для короны (отлив): светлый → металл → тёмный = диагональный блик. */
+const CROWN_METALS: Record<1 | 2 | 3, [string, string, string]> = {
+  1: ['#fff3c4', '#f5cb5c', '#c8962f'], // золото
+  2: ['#ffffff', '#dbe3e5', '#9aa7a9'], // серебро
+  3: ['#f3cba0', '#cf9163', '#8c5a32'], // бронза
+};
+
+/** Корона у ника для топ-3 с металлическим отливом (SVG-градиент = «живой» блеск). */
+function CrownIcon({ rank }: { rank: 1 | 2 | 3 }) {
+  const [light, mid, dark] = CROWN_METALS[rank];
+  const id = `crown-grad-${rank}`;
+  return (
+    <svg className="lb__crown" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0.15" y1="0.05" x2="0.5" y2="1">
+          <stop offset="0" stopColor={light} />
+          <stop offset="0.55" stopColor={mid} />
+          <stop offset="1" stopColor={dark} />
+        </linearGradient>
+      </defs>
+      <path fill={`url(#${id})`} d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5z" />
+    </svg>
+  );
+}
+
 /**
  * Экран публичного лидерборда (2.4.a-2, ADR-0018): топ игроков по сумме очков честных сетевых партий.
- * Богатая строка (ник+аватар · очки · лучшая · сыграно · победы) в `<table>` (a11y: `scope`, моно-числа);
- * на узком экране таблица прокручивается. Состояния загрузка/пусто/ошибка. Только публичные поля.
+ * Ранжированные карточки в одной плашке-афише; топ-3 — корона у ника (золото/серебро/бронза с отливом).
+ * Состояния загрузка/пусто/ошибка. Только публичные поля (ник+аватар+агрегаты).
  */
 export function LeaderboardScreen() {
   const setView = useUiStore((s) => s.setView);
@@ -57,34 +82,22 @@ export function LeaderboardScreen() {
                   <span className={`lb__rank lb__rank--${i < 3 ? i + 1 : 'n'}`} aria-hidden="true">
                     {i + 1}
                   </span>
-                  <span className="lb__ava">
-                    {r.avatarUrl ? (
-                      <img
-                        className="lb__avatar"
-                        src={r.avatarUrl}
-                        alt=""
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <span className="lb__avatar" aria-hidden="true">
-                        {r.nickname.slice(0, 1).toUpperCase()}
-                      </span>
-                    )}
-                    {i === 0 && (
-                      <svg
-                        className="lb__crown"
-                        viewBox="0 0 24 24"
-                        width="24"
-                        height="24"
-                        aria-hidden="true"
-                      >
-                        <path fill="currentColor" d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5z" />
-                      </svg>
-                    )}
-                  </span>
+                  {r.avatarUrl ? (
+                    <img
+                      className="lb__avatar"
+                      src={r.avatarUrl}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="lb__avatar" aria-hidden="true">
+                      {r.nickname.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
                   <div className="lb__who">
                     <span className="lb__name">
                       <span className="lb__name-text">{r.nickname}</span>
+                      {i < 3 && <CrownIcon rank={(i + 1) as 1 | 2 | 3} />}
                     </span>
                     <span className="lb__meta data">
                       Best {r.best} · {r.played} {r.played === 1 ? 'game' : 'games'} · {r.wins}{' '}
