@@ -20,12 +20,12 @@ const regSeats = [
 describe('rowsForCompletedGame', () => {
   it('нет game:over в событиях → null (партия ещё идёт)', () => {
     expect(
-      rowsForCompletedGame([{ type: 'score:applied' }], result, regSeats, 'yahtzee'),
+      rowsForCompletedGame([{ type: 'score:applied' }], result, regSeats, 'yahtzee', false),
     ).toBeNull();
   });
 
   it('game:over + ≥1 зарегистрированный → строки', () => {
-    const rows = rowsForCompletedGame([{ type: 'game:over' }], result, regSeats, 'yahtzee');
+    const rows = rowsForCompletedGame([{ type: 'game:over' }], result, regSeats, 'yahtzee', false);
     expect(rows).not.toBeNull();
     expect(rows?.match.registeredCount).toBe(2);
     expect(rows?.players).toHaveLength(2);
@@ -36,16 +36,25 @@ describe('rowsForCompletedGame', () => {
       { playerId: 'p1', userId: null },
       { playerId: 'p2', userId: null },
     ];
-    expect(rowsForCompletedGame([{ type: 'game:over' }], result, guests, 'yahtzee')).toBeNull();
+    expect(
+      rowsForCompletedGame([{ type: 'game:over' }], result, guests, 'yahtzee', false),
+    ).toBeNull();
   });
 
-  it('промах места (будущий forfeit) → onMissingSeat вызван, без падения', () => {
+  it('forfeited=true → null, даже при game:over и зарегистрированных (доиграно за ушедшего, ADR-0018)', () => {
+    expect(
+      rowsForCompletedGame([{ type: 'game:over' }], result, regSeats, 'yahtzee', true),
+    ).toBeNull();
+  });
+
+  it('промах места (forfeit-сценарий) → onMissingSeat вызван, без падения', () => {
     const missing: string[] = [];
     rowsForCompletedGame(
       [{ type: 'game:over' }],
       result,
       [{ playerId: 'p1', userId: 'u1' }],
       'yahtzee',
+      false,
       (id) => missing.push(id),
     );
     expect(missing).toEqual(['p2']);

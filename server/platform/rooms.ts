@@ -6,7 +6,7 @@
  * CSPRNG-значений костей (ADR-0012), версионированием состояния и идемпотентностью по `actionId`.
  */
 import type { ActionMessage, NetworkAction } from '../../shared/protocol';
-import { CATEGORIES } from '../../src/core';
+import { availableCategories, CATEGORIES } from '../../src/core';
 import type {
   Action,
   DieValue,
@@ -135,5 +135,57 @@ export function applyNetworkAction(
       processed: [...room.processed, msg.actionId],
     },
     events,
+  };
+}
+
+/**
+ * ОДИН авто-ход за ВЫШЕДШЕГО игрока (форфейт, 2.4.c-2; ADR-0009 «выбывший на своём ходу → партия обязана
+ * завершаться»). Бросок серверным CSPRNG (`rollValues`) и запись в ПЕРВУЮ свободную категорию текущего
+ * игрока — чтобы партия не висла на ходу отсутствующего и гарантированно дошла до `game:over`. Идёт через
+ * тот же `applyNetworkAction` (авторизация хода/версии/идемпотентность), поэтому `actorId` обязан быть
+ * id игрока, чей сейчас ход. `actionId` минтит сервер (`mintActionId`, инъекция — как `rollValues`): он
+ * ДОЛЖЕН быть НЕугадываемым (напр. `randomUUID`), иначе клиент, зная схему `forfeit-<версия>`, заранее
+ * засеет `processed[]` тем же id (даже denied-ход «не в свою очередь» пишет actionId в `processed[]`) →
+ * авто-ход вернёт `duplicate` без смены версии → каскад зависнет (адверсариальная находка ревью). Если
+ * игрок успел бросить до выхода (`rolledThisTurn`), повторно не бросаем. `denied`/`duplicate` пробрасываем
+ * наверх — для активного игрока с валидным ходом не наступают (страховка от рассинхрона). Чистая (без сокетов).
+ */
+export function applyForfeitTurn(
+  module: YahtzeeModule,
+  room: RoomState,
+  actorId: string,
+  rollValues: () => DieValue[],
+  mintActionId: () => string,
+): ApplyResult {
+  let cur = room;
+  const events: DomainEvent[] = [];
+  // SCORE требует брошенных костей (иначе `score-before-roll`); если игрок уже бросал до выхода — не бросаем.
+  if (!cur.state.rolledThisTurn) {
+    const rolled = applyNetworkAction(
+      module,
+      cur,
+      actorId,
+      { action: { type: 'ROLL' }, actionId: mintActionId() },
+      rollValues,
+    );
+    if (rolled.denied || rolled.duplicate) return rolled; // не его ход / рассинхрон — наверх (каскад встанет)
+    cur = rolled.room;
+    events.push(...rolled.events);
+  }
+  // У активного игрока свободная категория всегда есть (иначе ход бы уже ушёл). Страховка от пустого списка.
+  const category = availableCategories(cur.state)[0];
+  if (!category) return { room: cur, events, denied: 'no-free-category' };
+  const scored = applyNetworkAction(
+    module,
+    cur,
+    actorId,
+    { action: { type: 'SCORE', category }, actionId: mintActionId() },
+    rollValues,
+  );
+  return {
+    room: scored.room,
+    events: [...events, ...scored.events],
+    denied: scored.denied,
+    duplicate: scored.duplicate,
   };
 }

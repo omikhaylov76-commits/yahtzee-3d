@@ -2,10 +2,11 @@
  * Решение «писать ли итог завершённой партии» + сборка строк (2.3.d-2). Вынесено из realtime, чтобы триггер и
  * guard были юнит-тестируемы без сокетов/БД (socket-обвязка realtime юнитом не покрывается).
  *
- * Возвращает строки ТОЛЬКО если: (1) партия естественно завершилась — `game:over` среди событий действия; и
- * (2) есть ≥1 зарегистрированный игрок. Иначе null: партия ещё идёт / брошена (game:over не наступает) / только
- * гости (в историю/рейтинг не пишем — политика зачёта 2.4.a). Триггер по СОБЫТИЮ (не по фазе): дубль actionId
- * не порождает событий и сюда не доходит (realtime отсекает duplicate раньше) — записи не задвоить.
+ * Возвращает строки ТОЛЬКО если: (1) партия естественно завершилась — `game:over` среди событий действия;
+ * (2) её НЕ доигрывали автоматически за вышедшего (`forfeited`, 2.4.c-2); и (3) есть ≥1 зарегистрированный
+ * игрок. Иначе null: партия ещё идёт / брошена (game:over не наступает) / доиграна форфейтом / только гости
+ * (в историю/рейтинг не пишем — политика зачёта 2.4.a / ADR-0018). Триггер по СОБЫТИЮ (не по фазе): дубль
+ * actionId не порождает событий и сюда не доходит (realtime отсекает duplicate раньше) — записи не задвоить.
  */
 import { buildMatchRows, type MatchRows, type SeatRef } from './buildRows';
 import type { MatchResult } from '../gameModule';
@@ -15,8 +16,12 @@ export function rowsForCompletedGame(
   result: MatchResult,
   seats: readonly SeatRef[],
   gameId: string,
+  forfeited: boolean,
   onMissingSeat?: (playerId: string) => void,
 ): MatchRows | null {
+  // Партию доигрывали за ушедшего (форфейт, ADR-0009/0018): «техническая победа за уход» в рейтинг/историю
+  // не идёт — гейт ЕДИНОЙ точкой здесь, ловит и «доиграна живым после частичного форфейта» (C1-фикс).
+  if (forfeited) return null;
   if (!events.some((e) => e.type === 'game:over')) return null;
   const rows = buildMatchRows(result, seats, gameId, onMissingSeat);
   if (rows.match.registeredCount < 1) return null; // только гости — в историю/рейтинг не пишем

@@ -33,12 +33,21 @@ function seat(playerId: string, over: Partial<Seat> = {}): Seat {
     isHost: false,
     ready: false,
     notReadySince: null,
+    disconnectedAt: null,
     ...over,
   };
 }
 
 function room(seats: Seat[], game: Room['game'] = null): Room {
-  return { id: 'ABC234', visibility: 'private', seats, game, createdAt: 0, emptiedAt: null };
+  return {
+    id: 'ABC234',
+    visibility: 'private',
+    seats,
+    game,
+    createdAt: 0,
+    emptiedAt: null,
+    forfeited: false,
+  };
 }
 
 describe('findReclaimSeat', () => {
@@ -199,6 +208,17 @@ describe('resetRoomToLobby', () => {
     r.emptiedAt = 123;
     resetRoomToLobby(r);
     expect(r.emptiedAt).toBeNull();
+  });
+
+  it('сбрасывает forfeited и disconnectedAt оставшихся (реванш чист, 2.4.c-2)', () => {
+    const r = room(
+      [seat('a', { socketId: 'live', isHost: true, disconnectedAt: 999 })],
+      {} as Room['game'],
+    );
+    r.forfeited = true;
+    resetRoomToLobby(r);
+    expect(r.forfeited).toBe(false);
+    expect(r.seats[0].disconnectedAt).toBeNull();
   });
 });
 

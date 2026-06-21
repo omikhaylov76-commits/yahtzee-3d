@@ -30,7 +30,7 @@ import {
   type ResetPayload,
   type StatePayload,
 } from '../../shared/protocol';
-import { applyNetworkAction, startGame, type YahtzeeModule } from './rooms';
+import { applyForfeitTurn, applyNetworkAction, startGame, type YahtzeeModule } from './rooms';
 import {
   allReadyToStart,
   canStart,
@@ -67,6 +67,7 @@ const DICE_COUNT = 5;
 const MAX_ROOMS = 500; // cap активных комнат на процесс — RAM узкое место (ADR-0009), graceful-отказ
 const LOBBY_TTL_MS = 30 * 60_000; // заброшенное лобби (создали и не стартовали) подметаем
 const GAME_GRACE_MS = 2 * 60_000; // идущую партию без живых держим столько на реконнект (ADR-0010)
+const FORFEIT_MS = 60_000; // ушедшего В ПАРТИИ ждём столько, потом сервер доигрывает за него (форфейт, ADR-0010)
 const SWEEP_EVERY_MS = 60_000; // период сборки мусора комнат
 const MAX_JOIN_FAILS = 10; // анти-перебор кода: после серии неуспешных join сокет временно «залочен»
 const JOIN_LOCK_MS = 30_000;
@@ -170,6 +171,66 @@ export function attachRealtime(
   }
 
   /**
+   * Запись итога завершённой партии в БД (2.3.d-2 → вынесено в 2.4.c-2 единой точкой). Не game:over /
+   * форфейт / только гости → `rowsForCompletedGame` вернёт null (не пишем). Дубль actionId сюда не доходит
+   * (realtime отсекает duplicate раньше) — записи не задвоить. Сбой записи логируем, но НЕ роняем игру (БД
+   * вне realtime-петли, ADR-0009); лог без имён/PII (2.3.d).
+   */
+  function recordIfCompleted(room: Room, events: StatePayload['events']): void {
+    if (!recordMatch || !room.game) return;
+    const rows = rowsForCompletedGame(
+      events,
+      module.getResult(room.game.state),
+      room.seats,
+      module.id,
+      room.forfeited,
+      (playerId) => log.warn({ roomId: room.id, playerId }, 'finished-game seat missing'),
+    );
+    if (rows) {
+      recordMatch(rows).catch((err) => log.error({ err, roomId: room.id }, 'recordMatch failed'));
+    }
+  }
+
+  /**
+   * Доиграть за ВЫШЕДШИХ игроков (форфейт, 2.4.c-2; ADR-0009 «выбывший на своём ходу → партия обязана
+   * завершаться»). Пока ход у места без живого сокета, простоявшего дольше FORFEIT_MS, сервер ходит за него
+   * (`applyForfeitTurn`) и рассылает новое состояние. Цикл промотает НЕСКОЛЬКО ушедших подряд («разом») и
+   * встанет на ЖИВОМ игроке или на `game:over`. Любое авто-добивание метит партию `forfeited` (итог вне
+   * рейтинга/истории, ADR-0018; гейт в `recordIfCompleted`). Зовём из sweeper-тика (таймер дропа гарантирует
+   * завершение) и после успешного хода живого (чтобы не ждать таймаут на каждом круге ушедшего — C3-фикс).
+   * Идемпотентно: Node однопоточный, `state` читается свежим; вернувшийся (reclaim снял `disconnectedAt`)
+   * не форфейтится. Завершённую форфейтом партию НЕ пишем — стол сбросит/снесёт обычная ветка sweeper.
+   */
+  function runForfeits(room: Room, now: number): void {
+    let acted = false;
+    let guard = 0;
+    const MAX_AUTO_TURNS = ROOM_CAPACITY * 13 + 1; // потолок ходов в партии — страховка от зацикливания
+    while (room.game && !module.isGameOver(room.game.state) && guard++ < MAX_AUTO_TURNS) {
+      const game = room.game;
+      const seat = room.seats.find((s) => module.isPlayersTurn(game.state, s.playerId));
+      if (!seat || seat.socketId !== null) break; // ход у живого / места нет — стоп
+      if (seat.disconnectedAt === null || now - seat.disconnectedAt <= FORFEIT_MS) break; // ещё ждём возврата
+      const result = applyForfeitTurn(
+        module,
+        game,
+        seat.playerId,
+        () => rollDiceValues(DICE_COUNT),
+        randomUUID, // НЕугадываемый actionId: клиент не засеет processed[] заранее → каскад не зависнет
+      );
+      // Авто-ход не применился (denied/duplicate при рассинхроне) → выходим, НЕ метим форфейт и НЕ
+      // зацикливаемся (версия не сдвинулась бы — тот же seat остался бы текущим). Норма: не наступает.
+      if (result.denied || result.duplicate) break;
+      room.game = result.room;
+      room.forfeited = true;
+      acted = true;
+      io.to(room.id).emit(MSG.state, snapshot(room, result.events));
+    }
+    if (acted && room.game && module.isGameOver(room.game.state)) {
+      log.info({ roomId: room.id }, 'game finished by forfeit — not recorded (ADR-0018)');
+    }
+  }
+
+  /**
    * Переиндексация мест после УДАЛЕНИЯ из лобби (кик/выход): каждому ЖИВОМУ месту шлём его АКТУАЛЬНЫЙ
    * `joined` (новый seat + роль; свой `playerId` — не утечка), затем общий состав. Без этого у сдвинутых
    * игроков `mySeat` устаревает: пропадает «you»-бейдж, а промотированный хозяин не видит Start (баг 2.2.a).
@@ -230,14 +291,19 @@ export function attachRealtime(
           rooms.delete(id);
           log.info({ roomId: id }, 'lobby swept (idle/abandoned)');
         }
-      } else if (noLive && room.emptiedAt !== null && now - room.emptiedAt > GAME_GRACE_MS) {
-        // Брошенную партию дежурного стола НЕ удаляем — возвращаем стол в лобби (он постоянный, ADR-0017).
-        if (room.visibility === 'persistent') {
-          resetRoomToLobby(room);
-          log.info({ roomId: id }, 'house table reset to lobby (abandoned game)');
-        } else {
-          rooms.delete(id);
-          log.info({ roomId: id }, 'abandoned game swept (grace elapsed)');
+      } else {
+        // Идущая партия: сперва доиграть за просроченных отсутствующих (таймер дропа, 2.4.c-2) — даже если
+        // живые ещё есть (ход мог застрять на ушедшем); затем снос брошенной всеми партии по grace.
+        runForfeits(room, now);
+        if (noLive && room.emptiedAt !== null && now - room.emptiedAt > GAME_GRACE_MS) {
+          // Брошенную партию дежурного стола НЕ удаляем — возвращаем стол в лобби (он постоянный, ADR-0017).
+          if (room.visibility === 'persistent') {
+            resetRoomToLobby(room);
+            log.info({ roomId: id }, 'house table reset to lobby (abandoned game)');
+          } else {
+            rooms.delete(id);
+            log.info({ roomId: id }, 'abandoned game swept (grace elapsed)');
+          }
         }
       }
     }
@@ -295,6 +361,7 @@ export function attachRealtime(
         isHost,
         ready: false, // готовность подтверждается в лобби (ready-up для open/persistent, 2.5.b)
         notReadySince: null, // предохранитель проставит при простое не-готовым (2.5.e)
+        disconnectedAt: null, // таймер форфейта (2.4.c-2) — ставится при socketId→null в идущей партии
         userId: sessionUser?.userId ?? null,
       });
       sockets.set(socket.id, { roomId: room.id, playerId });
@@ -352,6 +419,7 @@ export function attachRealtime(
         title: open ? normalizeName(parsed.data.title) || undefined : undefined,
         seats: [],
         game: null,
+        forfeited: false,
         createdAt: Date.now(),
         emptiedAt: null,
       };
@@ -393,6 +461,7 @@ export function attachRealtime(
         if (room && reclaim) {
           const prevSocketId = reclaim.socketId;
           reclaim.socketId = socket.id; // перепривязка на новый сокет
+          reclaim.disconnectedAt = null; // вернулся в окно — отменяем таймер форфейта (2.4.c-2)
           room.emptiedAt = null; // кто-то вернулся — снимаем grace-таймер сноса партии
           sockets.set(socket.id, { roomId: room.id, playerId: reclaim.playerId });
           socket.join(room.id);
@@ -460,6 +529,7 @@ export function attachRealtime(
         if (room && reclaim) {
           const prevSocketId = reclaim.socketId;
           reclaim.socketId = socket.id; // перепривязка на новый сокет
+          reclaim.disconnectedAt = null; // вернулся в окно — отменяем таймер форфейта (2.4.c-2)
           room.emptiedAt = null; // кто-то вернулся — снимаем grace-таймер сноса партии
           joinFails = 0; // успешный возврат — это не перебор
           sockets.set(socket.id, { roomId: code, playerId: reclaim.playerId });
@@ -636,28 +706,17 @@ export function attachRealtime(
       // Успех: рассылаем новое авторитетное состояние + события всем в комнате.
       io.to(room.id).emit(MSG.state, snapshot(room, result.events));
 
-      // Запись итога при ЕСТЕСТВЕННОМ завершении партии (2.3.d-2): собрать строки и записать ВНЕ горячего
-      // пути. Не game:over / только гости → rowsForCompletedGame вернёт null. Дубль actionId сюда не доходит
-      // (return по result.duplicate выше) — записи не задвоить. Сбой записи логируем, но НЕ роняем игру
-      // (БД вне realtime-петли, ADR-0009); лог без имён/PII (2.3.d).
-      if (recordMatch && room.game) {
-        const rows = rowsForCompletedGame(
-          result.events,
-          module.getResult(room.game.state),
-          room.seats,
-          module.id,
-          (playerId) => log.warn({ roomId: room.id, playerId }, 'finished-game seat missing'),
-        );
-        if (rows) {
-          recordMatch(rows).catch((err) =>
-            log.error({ err, roomId: room.id }, 'recordMatch failed'),
-          );
-        }
-      }
+      // Запись итога при ЕСТЕСТВЕННОМ завершении партии (2.3.d-2): единой точкой; форфейт/не-game:over/только
+      // гости → внутри вернётся null (не пишем). Дубль actionId сюда не доходит (return по duplicate выше).
+      recordIfCompleted(room, result.events);
+
+      // Ход живого применён — сразу промотать просроченных отсутствующих перед следующим ходом (C3-фикс: не
+      // ждать таймаут на каждом круге ушедшего). Партия уже завершилась → runForfeits сразу выйдет (isGameOver).
+      runForfeits(room, Date.now());
 
       // ADR-0016: open/persistent стол ПЕРЕЖИВАЕТ партию, но сброс в лобби — НЕ авто на game:over
       // (иначе экран победителя мелькает), а по «Play again» игрока (MSG.playAgain, 2.5.d-3b): сперва
-      // игроки видят итоги, затем кто-то жмёт реванш. recordMatch выше уже записал итог на game:over.
+      // игроки видят итоги, затем кто-то жмёт реванш. recordIfCompleted выше уже записал итог на game:over.
     });
 
     socket.on('disconnect', () => {
@@ -683,7 +742,10 @@ export function attachRealtime(
         // Партия идёт: место держим за игроком (reclaim — 2.1.e-2). Обнуляем ТОЛЬКО если место всё
         // ещё за ЭТИМ сокетом: поздний disconnect старого сокета не должен затереть reclaim.
         const seat = room.seats.find((s) => s.playerId === ctx.playerId);
-        if (seat && seat.socketId === socket.id) seat.socketId = null;
+        if (seat && seat.socketId === socket.id) {
+          seat.socketId = null;
+          seat.disconnectedAt = Date.now(); // запустить таймер форфейта (2.4.c-2): сервер доиграет за ушедшего
+        }
         // Если живых не осталось — НЕ сносим сразу: даём grace на реконнект (ADR-0010), реальный снос
         // делает sweeper по истечении GAME_GRACE_MS. Так общий блип сети не теряет активную партию.
         if (room.seats.every((s) => s.socketId === null)) room.emptiedAt = Date.now();

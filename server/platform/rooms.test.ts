@@ -3,8 +3,9 @@
  * инъекция CSPRNG-значений с уважением held, отказы правил ядра, обобщённый итог. Чистая логика —
  * без сокетов; модуль Yahtzee реальный (ядро чистое), `rollValues` детерминированы в тесте.
  */
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
-import { applyNetworkAction, startGame } from './rooms';
+import { applyForfeitTurn, applyNetworkAction, startGame } from './rooms';
 import { rollDiceValues, randomSeed } from './rng';
 import { yahtzeeModule } from '../games/yahtzee';
 import type { ActionMessage } from '../../shared/protocol';
@@ -175,6 +176,59 @@ describe('ход и итог', () => {
     expect(res.standings.map((s) => s.id)).toEqual(['A', 'B']);
     expect(res.standings.every((s) => s.total === 0)).toBe(true);
     expect(res.winnerIds).toEqual([]);
+  });
+});
+
+describe('applyForfeitTurn — авто-ход за вышедшего (2.4.c-2)', () => {
+  it('один форфейт-ход: бросок + запись первой свободной → ход переходит дальше', () => {
+    const r = applyForfeitTurn(yahtzeeModule, fresh(), 'A', roll(1, 2, 3, 4, 5), randomUUID);
+    expect(r.denied).toBeUndefined();
+    expect(r.events.some((e) => e.type === 'dice:rolled')).toBe(true);
+    expect(r.events.some((e) => e.type === 'score:written')).toBe(true);
+    expect(r.events.some((e) => e.type === 'turn:changed')).toBe(true);
+    expect(yahtzeeModule.isPlayersTurn(r.room.state, 'B')).toBe(true); // ход ушёл к следующему
+    expect(r.room.stateVersion).toBe(3); // roll(v2) + score(v3)
+  });
+
+  it('игрок уже бросил до выхода → повторно НЕ бросаем, только пишем', () => {
+    const rolled = applyNetworkAction(
+      yahtzeeModule,
+      fresh(),
+      'A',
+      { action: { type: 'ROLL' }, actionId: 'a1' },
+      roll(2, 2, 2, 2, 2),
+    ).room;
+    const r = applyForfeitTurn(yahtzeeModule, rolled, 'A', roll(6, 6, 6, 6, 6), randomUUID);
+    expect(r.events.some((e) => e.type === 'dice:rolled')).toBe(false); // без повторного броска
+    expect(r.events.some((e) => e.type === 'score:written')).toBe(true);
+    expect(r.room.stateVersion).toBe(rolled.stateVersion + 1); // только score
+  });
+
+  it('не его ход → denied (каскад встанет), состояние нетронуто', () => {
+    const r = applyForfeitTurn(yahtzeeModule, fresh(), 'B', roll(1, 2, 3, 4, 5), randomUUID); // ход A, не B
+    expect(r.denied).toBe('not-your-turn');
+  });
+
+  it('minter ДОЛЖЕН быть уникален: повтор id → score=duplicate (контракт против адверсариального стопора)', () => {
+    // Если actionId предсказуем/повторяется, клиент мог бы заранее засеять processed[] и завесить каскад
+    // (находка ревью). Тест пинит контракт: ROLL и SCORE обязаны получить РАЗНЫЕ id, иначе ход не применится.
+    const r = applyForfeitTurn(yahtzeeModule, fresh(), 'A', roll(1, 2, 3, 4, 5), () => 'same-id');
+    expect(r.duplicate).toBe(true); // SCORE с тем же id, что ROLL → дубль, ход не записан
+    expect(r.events.some((e) => e.type === 'score:written')).toBe(false);
+  });
+
+  it('каскад форфейтов ГАРАНТИРОВАННО доводит партию до game:over (оба вышли)', () => {
+    let room = fresh();
+    let guard = 0;
+    while (!yahtzeeModule.isGameOver(room.state) && guard++ < 100) {
+      const actor = ['A', 'B'].find((id) => yahtzeeModule.isPlayersTurn(room.state, id))!;
+      room = applyForfeitTurn(yahtzeeModule, room, actor, () => rollDiceValues(5), randomUUID).room;
+    }
+    expect(yahtzeeModule.isGameOver(room.state)).toBe(true);
+    expect(guard).toBe(26); // 2 игрока × 13 категорий — ровно столько ходов
+    const result = yahtzeeModule.getResult(room.state);
+    expect(result.standings).toHaveLength(2);
+    expect(result.winnerIds.length).toBeGreaterThanOrEqual(1);
   });
 });
 
