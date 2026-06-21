@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createGameStore, selectInputLocked, selectTurnBanner } from './gameStore';
+import {
+  createGameStore,
+  selectInputLocked,
+  selectTurnBanner,
+  selectWaitingFor,
+} from './gameStore';
 import { LocalTransport } from '../transport/LocalTransport';
 import { MemoryGameStorage } from '../storage/memoryGameStorage';
 import type { Transport, TransportListener } from '../transport/Transport';
@@ -348,12 +353,13 @@ describe('gameStore — сетевой гейтинг ввода (2.1.d-3)', () 
     expect(selectTurnBanner(store.getState())).toBe('Connection lost — reconnecting…');
   });
 
-  it('остался один (2.2.d-2): presence без соперника → баннер «opponent left», приоритет над «чужой ход»', () => {
+  it('отсутствующий В ЕГО ход (2.4.c-3-2): оверлей waiting, баннер молчит (без дублей)', () => {
     const ctx = enterOnline('A', 'B'); // ход соперника B
     expect(selectTurnBanner(ctx.store.getState())).toBe("Opponent's turn"); // presence ещё не пришёл
-    ctx.cb()?.onPresence(['A']); // сервер: на связи только я → соперник вышел
+    ctx.cb()?.onPresence(['A']); // сервер: на связи только я → соперник (ходящий) вышел
     expect(ctx.store.getState().connectedIds).toEqual(['A']);
-    expect(selectTurnBanner(ctx.store.getState())).toBe('Your opponent left the game.');
+    expect(selectWaitingFor(ctx.store.getState())).toEqual({ playerId: 'B', name: 'B' });
+    expect(selectTurnBanner(ctx.store.getState())).toBeNull(); // оверлей перекрывает баннер
     expect(selectInputLocked(ctx.store.getState())).toBe(true); // его ход — ввод всё равно закрыт
   });
 
@@ -363,11 +369,12 @@ describe('gameStore — сетевой гейтинг ввода (2.1.d-3)', () 
     expect(selectTurnBanner(ctx.store.getState())).toBe("Opponent's turn"); // оба на связи — обычный «чужой ход»
   });
 
-  it('соперник вернулся (2.2.d-2): новый presence с обоими снимает баннер «opponent left»', () => {
+  it('соперник вернулся (2.4.c-3-2): оверлей waiting в его ход снимается на presence с обоими', () => {
     const ctx = enterOnline('A', 'B');
-    ctx.cb()?.onPresence(['A']); // ушёл
-    expect(selectTurnBanner(ctx.store.getState())).toBe('Your opponent left the game.');
+    ctx.cb()?.onPresence(['A']); // ушёл (его ход) → оверлей waiting
+    expect(selectWaitingFor(ctx.store.getState())).toEqual({ playerId: 'B', name: 'B' });
     ctx.cb()?.onPresence(['A', 'B']); // reclaim — вернулся
+    expect(selectWaitingFor(ctx.store.getState())).toBeNull();
     expect(selectTurnBanner(ctx.store.getState())).toBe("Opponent's turn");
   });
 
@@ -386,10 +393,31 @@ describe('gameStore — сетевой гейтинг ввода (2.1.d-3)', () 
     expect(ctx.store.getState().connectedIds).toBeNull();
   });
 
-  it('пустой presence (2.2.d-2): никого живого в списке → баннер «opponent left» (краевой)', () => {
+  it('пустой presence в его ход (2.4.c-3-2): отсутствующий ходящий → оверлей waiting (краевой)', () => {
     const ctx = enterOnline('A', 'B');
-    ctx.cb()?.onPresence([]); // никого на связи — «нет НИКОГО кроме меня» верно и для пустого списка
+    ctx.cb()?.onPresence([]); // никого на связи (краевой) — ходящий B точно отсутствует
+    expect(selectWaitingFor(ctx.store.getState())).toEqual({ playerId: 'B', name: 'B' });
+    expect(selectTurnBanner(ctx.store.getState())).toBeNull(); // оверлей перекрывает баннер
+  });
+
+  it('selectWaitingFor: МОЙ ход с отсутствующим соперником → null (играю), баннер «opponent left»', () => {
+    const ctx = enterOnline('A', 'A'); // МОЙ ход
+    ctx.cb()?.onPresence(['A']); // соперник вышел
+    expect(selectWaitingFor(ctx.store.getState())).toBeNull(); // мой ход — оверлеем никого не «ждём»
     expect(selectTurnBanner(ctx.store.getState())).toBe('Your opponent left the game.');
+  });
+
+  it('selectWaitingFor: текущий ходящий на связи → null (обычный «ход соперника»)', () => {
+    const ctx = enterOnline('A', 'B');
+    ctx.cb()?.onPresence(['A', 'B']); // оба на связи
+    expect(selectWaitingFor(ctx.store.getState())).toBeNull();
+    expect(selectTurnBanner(ctx.store.getState())).toBe("Opponent's turn");
+  });
+
+  it('selectWaitingFor: без presence (connectedIds=null) → null (считаем всех на связи)', () => {
+    const ctx = enterOnline('A', 'B'); // ход B, presence ещё не пришёл
+    expect(ctx.store.getState().connectedIds).toBeNull();
+    expect(selectWaitingFor(ctx.store.getState())).toBeNull();
   });
 
   it('local-режим: ввод никогда не заблокирован, баннера нет (без регрессий Вехи 1)', () => {

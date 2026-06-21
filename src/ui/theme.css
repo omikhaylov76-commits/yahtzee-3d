@@ -1116,11 +1116,53 @@ body {
 }
 
 .arena {
+  position: relative; /* 2.4.c-3-2: якорь для .waiting-overlay (оверлей «ждём игрока…») */
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--s-8);
   padding: var(--s-10) var(--s-6);
+}
+/* 2.4.c-3-2: оверлей «Waiting for {name}…» поверх зоны костей, пока отсутствующего ходящего ждёт
+   форфейт-таймер сервера (2.4.c-2). Сдержанная карточка по центру арены; pointer-events:none — не
+   перехватывает «← Menu» и не мешает (контролы и так заблокированы в чужой ход). */
+.waiting-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-6);
+  pointer-events: none;
+  z-index: 5;
+}
+.waiting-overlay__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  text-align: center;
+  background: rgba(1, 29, 28, 0.82);
+  border: 1px solid rgba(203, 255, 252, 0.22);
+  border-radius: var(--r-card, 16px);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(3px);
+}
+.waiting-overlay__title {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ice);
+}
+.waiting-overlay__count {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--ice);
+  text-shadow: 0 0 14px rgba(203, 255, 252, 0.35);
 }
 .turn {
   display: flex;

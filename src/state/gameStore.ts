@@ -367,6 +367,22 @@ export function selectInputLocked(s: GameStoreState): boolean {
 }
 
 /**
+ * Кого ждём (2.4.c-3-2): если ТЕКУЩИЙ ходящий — не я и сейчас НЕ на связи (его нет в `connectedIds`),
+ * а партия идёт, возвращаем {playerId, name} — клиент покажет оверлей «Waiting for {name}…» с
+ * приблизительным отсчётом до форфейта (сервер доиграет за него, 2.4.c-2). Иначе null. Чистая функция.
+ * Без данных присутствия (`connectedIds == null`, presence ещё не приходил) считаем всех на связи — оверлея нет.
+ */
+export function selectWaitingFor(s: GameStoreState): { playerId: string; name: string } | null {
+  if (s.mode !== 'online' || s.onlineStatus !== 'playing') return null;
+  const st = s.state;
+  if (!st || st.phase === 'over' || s.myPlayerId == null || s.connectedIds == null) return null;
+  const current = st.players[st.current];
+  if (!current || current.id === s.myPlayerId) return null; // нет текущего / мой ход — не жду
+  if (s.connectedIds.includes(current.id)) return null; // текущий на связи — обычный «Opponent's turn»
+  return { playerId: current.id, name: current.name };
+}
+
+/**
  * Текст баннера-подсказки для сетевой партии (или null — баннера нет). Приоритет: нет соединения →
  * ход соперника. `pending` баннера не показывает (краткий — достаточно блокировки кнопок) (2.1.d-3).
  */
@@ -376,6 +392,9 @@ export function selectTurnBanner(s: GameStoreState): string | null {
   // Пока сервер не сообщил наше место (`myPlayerId == null`), не утверждаем «ход соперника» — это
   // могло бы соврать в короткое окно реконнекта (2.1.e). Ввод всё равно заблокирован (fail-safe).
   if (s.myPlayerId == null || !s.state) return null;
+  // Текущий ходящий отсутствует (2.4.c-3-2) → показываем ОВЕРЛЕЙ «Waiting for {name}…», а баннер молчит
+  // (иначе задвоится с оверлеем; в 1-на-1 это бывший «opponent left» в ЕГО ход).
+  if (selectWaitingFor(s)) return null;
   // Остался один (2.2.d-2): сервер прислал присутствие идущей партии, и в нём нет НИКОГО, кроме меня —
   // соперник вышел. Партия не завершена штатно (over → WinnerScreen). Приоритет ниже «Connection lost»
   // (там упало МОЁ соединение), выше «Opponent's turn». Без forfeit (авто-победа/таймеры — 2.4.c).
@@ -397,4 +416,9 @@ export function useInputLocked(): boolean {
 /** Хук: текст баннера сетевой партии или null (см. `selectTurnBanner`). */
 export function useTurnBanner(): string | null {
   return useStore(gameStore, selectTurnBanner);
+}
+
+/** Хук: кого ждём в сетевой партии (отсутствующий текущий игрок) или null (см. `selectWaitingFor`). */
+export function useWaitingFor(): { playerId: string; name: string } | null {
+  return useStore(gameStore, selectWaitingFor);
 }

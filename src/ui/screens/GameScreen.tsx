@@ -8,7 +8,7 @@ import { ScoreTable } from '../components/ScoreTable';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { hasWebGL } from '../capabilities';
 import { totalsFor } from '../scoreView';
-import { useGameStore, useInputLocked, useTurnBanner } from '../../state/gameStore';
+import { useGameStore, useInputLocked, useTurnBanner, useWaitingFor } from '../../state/gameStore';
 import { useUiStore } from '../../state/uiStore';
 
 // F6.4: 3D-арена (Three.js + Rapier WASM, ~3 МБ) грузится ЛЕНИВО отдельным чанком — только
@@ -31,6 +31,46 @@ function deniedMessage(reason: string): string {
     default:
       return "Can't do that right now.";
   }
+}
+
+// Оверлей «ждём отсутствующего игрока» (2.4.c-3-2): пока текущий ходящий не на связи, сервер доиграет
+// за него (форфейт, 2.4.c-2). Отсчёт ПРИБЛИЗИТЕЛЬНЫЙ (ориентир): локальный таймер; реальный форфейт
+// сервера 60–120с. pointer-events:none — оверлей информативный, «← Menu» остаётся кликабельным.
+const FORFEIT_COUNTDOWN_S = 60; // зеркалит серверный FORFEIT_MS (приблизительно, см. 2.4.c-2)
+
+function WaitingOverlay() {
+  const waiting = useWaitingFor();
+  const targetId = waiting?.playerId ?? null;
+  const [remaining, setRemaining] = useState<number | null>(null);
+  useEffect(() => {
+    if (targetId == null) {
+      setRemaining(null);
+      return;
+    }
+    const start = Date.now();
+    setRemaining(FORFEIT_COUNTDOWN_S);
+    const id = setInterval(() => {
+      const left = FORFEIT_COUNTDOWN_S - Math.floor((Date.now() - start) / 1000);
+      setRemaining(left > 0 ? left : 0);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [targetId]);
+
+  if (!waiting) return null;
+  return (
+    <div className="waiting-overlay">
+      <div className="waiting-overlay__card">
+        {/* Имя игрока экранируется React'ом (XSS-задел CLAUDE.md): это пользовательский ввод. */}
+        <p className="waiting-overlay__title" role="status" aria-live="polite">
+          Waiting for {waiting.name} to reconnect…
+        </p>
+        {/* Отсчёт — визуальный ориентир; aria-hidden, чтобы скринридер не диктовал каждую секунду. */}
+        <p className="waiting-overlay__count" aria-hidden="true">
+          {remaining != null && remaining > 0 ? `${remaining}s` : 'finishing…'}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 /** Экран игры (F3.3): арена костей + контролы. Таблица счёта подключается в F3.4. */
@@ -188,6 +228,9 @@ export function GameScreen() {
           ) : (
             dice2D
           )}
+
+          {/* 2.4.c-3-2: оверлей «ждём отсутствующего игрока» поверх зоны костей (информативный). */}
+          <WaitingOverlay />
 
           <div className="controls">
             <Button variant="primary" className="roll-btn" onClick={roll} disabled={!canRoll}>
