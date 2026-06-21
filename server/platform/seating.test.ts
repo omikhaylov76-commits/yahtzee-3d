@@ -127,6 +127,21 @@ describe('ensureHost', () => {
     expect(r.seats[1].isHost).toBe(true);
   });
 
+  it('в идущей партии: хозяин вышел (socketId=null) → роль первому живому (2.4.c-3)', () => {
+    // Зеркалит состояние in-game disconnect-ветки realtime: место хозяина держим (reclaim), сокет null.
+    const r = room(
+      [
+        seat('a', { socketId: null, isHost: true, disconnectedAt: 1000 }),
+        seat('b', { socketId: 'sock-b' }),
+        seat('c', { socketId: 'sock-c' }),
+      ],
+      {} as Room['game'], // партия идёт
+    );
+    expect(ensureHost(r)?.playerId).toBe('b');
+    expect(r.seats[0].isHost).toBe(false);
+    expect(r.seats[1].isHost).toBe(true);
+  });
+
   it('возвращает undefined, если живых мест не осталось', () => {
     const r = room([seat('a', { socketId: null, isHost: true })]);
     expect(ensureHost(r)).toBeUndefined();
