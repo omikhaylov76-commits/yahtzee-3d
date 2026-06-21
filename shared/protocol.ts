@@ -16,10 +16,16 @@
  * v4 (2.5): открытые/дежурные столы + «стол переживает партию». 2.5.a-1 добавляет `room:reset`
  * (партия завершилась → стол возвращается в лобби, для open/persistent; клиент гасит состояние,
  * НЕ роняя сокет). Дальнейшие сообщения 2.5 (ready-up, joinOpen, список столов) — в этой же v4.
+ *
+ * v5 (2.4.c-1): реконнект-арбитраж. Reclaim места теперь по СЕКРЕТНОМУ `reconnectToken`
+ * (`JoinedPayload.reconnectToken`, шлётся владельцу; в запросах `JoinRequest`/`JoinOpenRequest`
+ * вместо публичного `playerId`), а не по угадываемому `playerId` (ADR-0010). Добавлен `room:gone` —
+ * ответ на reclaim в исчезнувшую/сброшенную/завершённую комнату (клиент: «партия завершена», не
+ * вечная загрузка). `playerId` остаётся публичным для авторизации хода/presence.
  */
 import type { Category, DomainEvent, PublicGameState } from '../src/core';
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Имена сокет-сообщений (одна точка истины для клиента и сервера). */
 export const MSG = {
@@ -42,6 +48,7 @@ export const MSG = {
   kicked: 'room:kicked', // тебя выгнал хозяин (2.2.c-1) — unicast жертве
   presence: 'room:presence', // кто на живом сокете в идущей партии (2.2.d-2): оставшийся один → баннер
   nicknameRequired: 'room:nickname-required', // залогиненный без ника просит вход → нужен онбординг (2.3.e-2b)
+  gone: 'room:gone', // reclaim в исчезнувшую/сброшенную/завершённую комнату (2.4.c-1) — «партия завершена»
   state: 'state',
   denied: 'denied',
 } as const;
@@ -77,11 +84,12 @@ export interface JoinRequest {
   roomId: string;
   name?: string;
   /**
-   * Reclaim места при РЕконнекте (2.1.e-2): вернувшийся клиент называет свой `playerId` (выданный
-   * сервером при первом входе), чтобы сервер вернул его в удерживаемое место идущей партии, а не
-   * отбил `room:full`. Первый вход — без поля. Полноценный reconnect-токен на место — 2.4.c.
+   * Reclaim места при РЕконнекте (ADR-0010, 2.4.c-1): вернувшийся клиент называет свой СЕКРЕТНЫЙ
+   * `reconnectToken` (выдан сервером в `JoinedPayload` при входе) — сервер возвращает его в удерживаемое
+   * место идущей партии. Токен непубличный (в отличие от `playerId`) → чужой со ссылкой место не займёт.
+   * Первый вход — без поля. Если место/комнаты уже нет — сервер отвечает `room:gone`.
    */
-  playerId?: string;
+  reconnectToken?: string;
 }
 
 /**
@@ -91,7 +99,8 @@ export interface JoinRequest {
 export interface JoinOpenRequest {
   tableId: string;
   name?: string;
-  playerId?: string;
+  /** Reclaim по секретному токену при реконнекте (2.4.c-1; см. `JoinRequest.reconnectToken`). */
+  reconnectToken?: string;
 }
 
 /** Хозяин выгоняет игрока из лобби (2.2.c-1): `seat` — индекс места жертвы в текущем составе лобби. */
@@ -111,6 +120,16 @@ export interface JoinedPayload {
   seat: number;
   /** Хозяин ли это место (создатель комнаты). Хозяин запускает партию кнопкой Start (2.2). */
   isHost: boolean;
+  /**
+   * СЕКРЕТНЫЙ токен реконнекта этого места (2.4.c-1, ADR-0010): клиент хранит его и присылает в
+   * `reconnectToken` при реконнекте, чтобы вернуться на своё место. Непубличный — другим НЕ рассылается.
+   */
+  reconnectToken: string;
+}
+
+/** Reclaim не удался — комнаты/места/партии уже нет (2.4.c-1): клиент показывает «партия завершена». */
+export interface GonePayload {
+  roomId: string;
 }
 
 /** Один игрок в составе лобби (до старта партии): место, имя, роль, готовность. */

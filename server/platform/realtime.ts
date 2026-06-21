@@ -19,6 +19,7 @@ import {
   type ActionMessage,
   type CreateRequest,
   type DeniedPayload,
+  type GonePayload,
   type JoinOpenRequest,
   type JoinRequest,
   type JoinedPayload,
@@ -182,6 +183,7 @@ export function attachRealtime(
           playerId: s.playerId,
           seat,
           isHost: s.isHost,
+          reconnectToken: s.reconnectToken, // владельцу — его же токен (свой playerId/токен не утечка)
         } satisfies JoinedPayload);
       }
     });
@@ -276,6 +278,7 @@ export function attachRealtime(
     function addSeat(room: Room, rawName: string | undefined, isHost: boolean): JoinedPayload {
       const seat = room.seats.length;
       const playerId = `seat-${randomUUID().slice(0, 8)}`;
+      const reconnectToken = randomUUID(); // СЕКРЕТНЫЙ токен реконнекта места (2.4.c-1) — не публичный playerId
       // Залогиненный (ADR-0015) → его уникальный НИК; гость → присланное имя (seatName: общий фильтр
       // NFC/невидимки/XSS/длина внутри) → дефолт по месту → дедуп одинаковых в комнате.
       const sessionUser = (socket.data.user ?? null) as SessionUser | null;
@@ -287,6 +290,7 @@ export function attachRealtime(
       room.seats.push({
         socketId: socket.id,
         playerId,
+        reconnectToken,
         name,
         isHost,
         ready: false, // готовность подтверждается в лобби (ready-up для open/persistent, 2.5.b)
@@ -295,7 +299,7 @@ export function attachRealtime(
       });
       sockets.set(socket.id, { roomId: room.id, playerId });
       socket.join(room.id);
-      return { roomId: room.id, playerId, seat, isHost };
+      return { roomId: room.id, playerId, seat, isHost, reconnectToken };
     }
 
     /**
@@ -374,30 +378,43 @@ export function attachRealtime(
         socket.emit(MSG.notFound, { roomId: '' }); // кривой запрос — как «не найдено»
         return;
       }
-      const { tableId, name, playerId } = parsed.data;
+      const { tableId, name, reconnectToken } = parsed.data;
       const room = rooms.get(tableId);
 
-      // RECLAIM при реконнекте в ИДУЩУЮ партию открытого/дежурного стола (ADR-0016/0010): вернувшийся
-      // назвал playerId → возвращаем в держимое место и досылаем state. Гейт по `room.game` (как в join):
-      // лобби места не держит (fresh-join). Полный reconnect-токен на место — 2.4.c.
-      const reclaim =
-        room && room.visibility !== 'private' && room.game
-          ? findReclaimSeat(room, playerId)
-          : undefined;
-      if (room && reclaim) {
-        reclaim.socketId = socket.id; // перепривязка на новый сокет (старый умрёт по ping-timeout)
-        room.emptiedAt = null; // кто-то вернулся — снимаем grace-таймер сноса партии
-        sockets.set(socket.id, { roomId: room.id, playerId: reclaim.playerId });
-        socket.join(room.id);
-        socket.emit(MSG.joined, {
-          roomId: room.id,
-          playerId: reclaim.playerId,
-          seat: room.seats.indexOf(reclaim),
-          isHost: reclaim.isHost,
-        } satisfies JoinedPayload);
-        socket.emit(MSG.state, snapshot(room, [])); // партия идёт — несём state.dice (e-1)
-        broadcastPresence(room); // вернулся — оставшиеся снимут баннер «соперник вышел» (2.2.d-2)
-        log.info({ roomId: room.id, playerId: reclaim.playerId }, 'player reclaimed open seat');
+      // RECLAIM при реконнекте в ИДУЩУЮ партию (ADR-0010, 2.4.c-1): вернувшийся назвал СЕКРЕТНЫЙ
+      // reconnectToken → возвращаем в держимое место и досылаем state. Гейт по `room.game`: лобби места
+      // не держит. Токен присутствует ⇒ это попытка реклейма: если места/партии уже нет — `room:gone`
+      // (НЕ молчаливый fresh-join в сброшенный/чужой стол).
+      if (reconnectToken) {
+        const reclaim =
+          room && room.visibility !== 'private' && room.game
+            ? findReclaimSeat(room, reconnectToken)
+            : undefined;
+        if (room && reclaim) {
+          const prevSocketId = reclaim.socketId;
+          reclaim.socketId = socket.id; // перепривязка на новый сокет
+          room.emptiedAt = null; // кто-то вернулся — снимаем grace-таймер сноса партии
+          sockets.set(socket.id, { roomId: room.id, playerId: reclaim.playerId });
+          socket.join(room.id);
+          // вытеснить старое окно, если оно ещё живо (анти-пинг-понг двух вкладок, 2.4.c-1)
+          if (prevSocketId && prevSocketId !== socket.id) {
+            io.sockets.sockets
+              .get(prevSocketId)
+              ?.emit(MSG.gone, { roomId: room.id } satisfies GonePayload);
+          }
+          socket.emit(MSG.joined, {
+            roomId: room.id,
+            playerId: reclaim.playerId,
+            seat: room.seats.indexOf(reclaim),
+            isHost: reclaim.isHost,
+            reconnectToken: reclaim.reconnectToken,
+          } satisfies JoinedPayload);
+          socket.emit(MSG.state, snapshot(room, [])); // партия идёт — несём state.dice (e-1)
+          broadcastPresence(room); // вернулся — оставшиеся снимут баннер «соперник вышел» (2.2.d-2)
+          log.info({ roomId: room.id, playerId: reclaim.playerId }, 'player reclaimed open seat');
+          return;
+        }
+        socket.emit(MSG.gone, { roomId: tableId } satisfies GonePayload); // партия завершена/стол сброшен
         return;
       }
 
@@ -430,41 +447,51 @@ export function attachRealtime(
         socket.emit(MSG.notFound, { roomId: '' }); // кривой запрос (2.3.c-4) — как «не найдено»
         return;
       }
-      const { roomId, name, playerId } = parsed.data;
+      const { roomId, name, reconnectToken } = parsed.data;
+      const code = normalizeCode(roomId);
+      const room = isValidCode(code) ? rooms.get(code) : undefined;
+
+      // RECLAIM при реконнекте (ADR-0010, 2.4.c-1): вернувшийся назвал СЕКРЕТНЫЙ reconnectToken —
+      // возвращаем его в удерживаемое место ИДУЩЕЙ партии. Гейт по `room.game`: в лобби места не держатся
+      // (disconnect их удаляет), reclaim уместен только для НАЧАТОЙ партии. Токен есть ⇒ это реклейм (не
+      // перебор кода): лок брутфорса НЕ применяем; место/партии уже нет → `room:gone` (не fresh-join).
+      if (reconnectToken) {
+        const reclaim = room?.game ? findReclaimSeat(room, reconnectToken) : undefined;
+        if (room && reclaim) {
+          const prevSocketId = reclaim.socketId;
+          reclaim.socketId = socket.id; // перепривязка на новый сокет
+          room.emptiedAt = null; // кто-то вернулся — снимаем grace-таймер сноса партии
+          joinFails = 0; // успешный возврат — это не перебор
+          sockets.set(socket.id, { roomId: code, playerId: reclaim.playerId });
+          socket.join(code);
+          if (prevSocketId && prevSocketId !== socket.id) {
+            io.sockets.sockets
+              .get(prevSocketId)
+              ?.emit(MSG.gone, { roomId: code } satisfies GonePayload); // вытеснить старое окно
+          }
+          socket.emit(MSG.joined, {
+            roomId: code,
+            playerId: reclaim.playerId,
+            seat: room.seats.indexOf(reclaim),
+            isHost: reclaim.isHost,
+            reconnectToken: reclaim.reconnectToken,
+          } satisfies JoinedPayload);
+          socket.emit(MSG.state, snapshot(room, [])); // партия идёт (гейт выше) — несём state.dice (e-1)
+          broadcastPresence(room); // вернулся — оставшиеся снимут баннер «соперник вышел» (2.2.d-2)
+          log.info({ roomId: code, playerId: reclaim.playerId }, 'player reclaimed seat');
+          return;
+        }
+        socket.emit(MSG.gone, { roomId: code } satisfies GonePayload); // комнаты/места/партии уже нет
+        return;
+      }
+
       const now = Date.now();
       if (now < joinLockedUntil) {
         // Залочен за перебор — молчим как при отсутствии комнаты (не подсказываем подборщику).
         socket.emit(MSG.notFound, { roomId });
         return;
       }
-      const code = normalizeCode(roomId);
-      const room = isValidCode(code) ? rooms.get(code) : undefined;
-
-      // RECLAIM при реконнекте (2.1.e-2): вернувшийся клиент назвал свой playerId — возвращаем его в
-      // удерживаемое место ИДУЩЕЙ партии и досылаем state. Гейт по `room.game`: в лобби места не
-      // держатся (disconnect их удаляет), поэтому reclaim уместен только для НАЧАТОЙ партии — это и
-      // сужает поверхность (подсадки в лобби по чужому playerId быть не может).
-      const reclaim = room?.game ? findReclaimSeat(room, playerId) : undefined;
-      if (room && reclaim) {
-        reclaim.socketId = socket.id; // перепривязка на новый сокет (старый умрёт по ping-timeout)
-        room.emptiedAt = null; // кто-то вернулся — снимаем grace-таймер сноса партии
-        joinFails = 0; // успешный возврат — это не перебор
-        sockets.set(socket.id, { roomId: code, playerId: reclaim.playerId });
-        socket.join(code);
-        const joined: JoinedPayload = {
-          roomId: code,
-          playerId: reclaim.playerId,
-          seat: room.seats.indexOf(reclaim),
-          isHost: reclaim.isHost,
-        };
-        socket.emit(MSG.joined, joined);
-        socket.emit(MSG.state, snapshot(room, [])); // партия идёт (гейт выше) — несём state.dice (e-1)
-        broadcastPresence(room); // вернулся — оставшиеся снимут баннер «соперник вышел» (2.2.d-2)
-        log.info({ roomId: code, playerId: reclaim.playerId }, 'player reclaimed seat');
-        return;
-      }
-
-      if (needsNickname()) return; // залогиненный без ника — сперва онбординг (2.3.e-2b); reclaim выше не гейтим
+      if (needsNickname()) return; // залогиненный без ника — сперва онбординг (2.3.e-2b)
 
       // Любой join, не приведший к посадке/reclaim, считаем неудачей перебора (не даём оракул: ответы
       // not-found / already-started / full одинаково двигают счётчик лока).

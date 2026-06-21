@@ -17,12 +17,12 @@ export const createReqSchema = z.object({
 export const joinReqSchema = z.object({
   roomId: z.string(),
   name: z.string().optional(),
-  playerId: z.string().optional(),
+  reconnectToken: z.string().max(64).optional(), // secret reclaim-токен (2.4.c-1), не публичный playerId
 });
 export const joinOpenReqSchema = z.object({
   tableId: z.string(),
   name: z.string().optional(),
-  playerId: z.string().optional(),
+  reconnectToken: z.string().max(64).optional(),
 });
 export const kickReqSchema = z.object({ seat: z.number().int() });
 export const readyReqSchema = z.object({ ready: z.boolean() });
@@ -53,6 +53,7 @@ export const joinedSchema = z.object({
   playerId: z.string(),
   seat: z.number().int(),
   isHost: z.boolean(),
+  reconnectToken: z.string(), // секретный токен реконнекта этого места (2.4.c-1)
 });
 export const lobbySchema = z.object({
   roomId: z.string(),
@@ -69,6 +70,7 @@ export const lobbySchema = z.object({
 });
 export const presenceSchema = z.object({ connected: z.array(z.string()) });
 export const resetSchema = z.object({ roomId: z.string() });
+export const goneSchema = z.object({ roomId: z.string() }); // reclaim в исчезнувшую комнату (2.4.c-1)
 export const deniedSchema = z.object({ reason: z.string(), actionId: z.string().optional() });
 export const stateSchema = z.object({
   stateVersion: z.number().int(),

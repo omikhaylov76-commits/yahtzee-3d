@@ -240,7 +240,13 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
   it('лобби/посадка зеркалятся в стор; startGameOnline зовёт session.start; goLocal чистит', () => {
     const { store, start, cb } = onlineStore();
     store.getState().goOnline({ type: 'create' });
-    cb()?.onJoined({ roomId: 'K7Q9ZP', playerId: 'seat-1', seat: 0, isHost: true });
+    cb()?.onJoined({
+      roomId: 'K7Q9ZP',
+      playerId: 'seat-1',
+      seat: 0,
+      isHost: true,
+      reconnectToken: 'rt-1',
+    });
     cb()?.onLobby({
       roomId: 'K7Q9ZP',
       players: [{ seat: 0, name: 'Alice', isHost: true, ready: false }],

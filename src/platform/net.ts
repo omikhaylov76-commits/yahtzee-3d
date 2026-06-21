@@ -35,6 +35,7 @@ const SERVER_URL = ENV_URL || (import.meta.env.DEV ? 'http://localhost:3001' : u
  * - `serverBusy` — сервер перегружен (cap комнат на процесс): create не удался (a-1: full с пустым roomId);
  * - `alreadyStarted` — партия в этой комнате уже идёт (код больше не пускает);
  * - `kicked` — хозяин выгнал нас из лобби (2.2.c-1) — терминально, назад на экран входа;
+ * - `gone` — реконнект в исчезнувшую/сброшенную/завершённую комнату (2.4.c-1) — терминально, «партия завершена»;
  * - `waiting` — мы в комнате (лобби), ждём игроков/старта;
  * - `playing` — пришло первое состояние, идёт партия (роутер покажет GameScreen).
  */
@@ -47,6 +48,7 @@ export type OnlineStatus =
   | 'serverBusy'
   | 'alreadyStarted'
   | 'kicked'
+  | 'gone'
   | 'waiting'
   | 'playing';
 
@@ -127,6 +129,7 @@ export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): 
   socket.on(MSG.notFound, () => closeWith('notFound'));
   socket.on(MSG.alreadyStarted, () => closeWith('alreadyStarted'));
   socket.on(MSG.kicked, () => closeWith('kicked')); // хозяин выгнал — терминально (2.2.c-1)
+  socket.on(MSG.gone, () => closeWith('gone')); // reclaim в исчезнувшую/завершённую комнату (2.4.c-1)
   socket.on(MSG.state, () => {
     if (!terminal) cb.onStatus('playing'); // пришло авторитетное состояние — партия пошла
   });

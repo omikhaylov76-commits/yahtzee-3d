@@ -16,6 +16,11 @@ export const MIN_TO_START = 2;
 export interface Seat {
   socketId: string | null;
   playerId: string;
+  /**
+   * СЕКРЕТНЫЙ токен реконнекта места (2.4.c-1, ADR-0010): по нему (а НЕ по публичному `playerId`)
+   * авторизуется reclaim при возврате. Выдаётся владельцу в `JoinedPayload`, другим не рассылается.
+   */
+  reconnectToken: string;
   name: string;
   /** Хозяин ли это место (создатель комнаты). Хозяин запускает партию в приватной комнате (2.2). */
   isHost: boolean;
@@ -188,15 +193,16 @@ export function publicTables(rooms: Iterable<Room>): OpenTable[] {
 }
 
 /**
- * Найти место для RECLAIM при реконнекте (2.1.e-2): место с таким `playerId` (выдан сервером при
- * первом входе). Матчим по id НЕЗАВИСИМО от текущего `socketId`: engine.io может узнать о смерти
- * старого сокета с задержкой (ping-timeout) уже ПОСЛЕ возврата клиента новым сокетом — ждать
- * `socketId===null` нельзя, иначе reclaim упёрся бы в `room:full`. Пустой/неизвестный id → undefined
- * (обычный fresh-join). Перепривязку `socketId` и анти-затирание делает вызывающий (realtime.ts).
+ * Найти место для RECLAIM при реконнекте (2.1.e-2 → 2.4.c-1): место с таким СЕКРЕТНЫМ `reconnectToken`
+ * (выдан владельцу при входе). По токену, а НЕ по публичному `playerId` (ADR-0010): иначе любой с
+ * угадываемым id занял бы чужое место. Матчим НЕЗАВИСИМО от текущего `socketId`: engine.io может узнать о
+ * смерти старого сокета с задержкой (ping-timeout) уже ПОСЛЕ возврата клиента новым сокетом — ждать
+ * `socketId===null` нельзя, иначе reclaim упёрся бы в `room:full`. Пустой/неизвестный токен → undefined.
+ * Перепривязку `socketId` и анти-затирание (вытеснение старого окна) делает вызывающий (realtime.ts).
  */
-export function findReclaimSeat(room: Room, playerId: string | undefined): Seat | undefined {
-  if (!playerId) return undefined;
-  return room.seats.find((s) => s.playerId === playerId);
+export function findReclaimSeat(room: Room, token: string | undefined): Seat | undefined {
+  if (!token) return undefined;
+  return room.seats.find((s) => s.reconnectToken === token);
 }
 
 /**

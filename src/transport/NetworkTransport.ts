@@ -56,6 +56,8 @@ export class NetworkTransport implements Transport {
   /** `actionId` действия «в полёте» (ADR-0013): пока не null — новые действия игнорируются. */
   private pendingActionId: string | null = null;
   private playerId: string | null = null;
+  /** Секретный токен реконнекта места (2.4.c-1): получаем в `joined`, шлём при реклейме (не публичный playerId). */
+  private reconnectToken: string | null = null;
   /** Код комнаты: для `join` известен сразу, для `create` узнаём из `joined`. Нужен для reclaim. */
   private code: string | null;
   /** После `reset()` — true: входящие сокет-события игнорируются (нет `off`, чтобы не воскресить). */
@@ -81,6 +83,7 @@ export class NetworkTransport implements Transport {
       const v = joinedSchema.safeParse(p);
       if (!v.success) return;
       this.playerId = v.data.playerId;
+      this.reconnectToken = v.data.reconnectToken; // секрет для reclaim при реконнекте (2.4.c-1)
       this.code = v.data.roomId; // для create узнаём выданный код; для join — подтверждаем нормализованный
     });
     // Стол вернулся в лобби после завершившейся партии (ADR-0016, реванш, open/persistent): гасим
@@ -106,20 +109,21 @@ export class NetworkTransport implements Transport {
     // Реклейм на (ре)коннект: playerId+id уже есть → возврат. Для joinOpen — через joinOpen (открытый/
     // дежурный стол), иначе через join (приватный код). Имя пробрасываем (в ЛОББИ место не держится,
     // fresh-join сбросил бы его на «Player N»). Сброс pending — авторитетный re-snapshot разрулит.
-    if (this.playerId && this.code) {
+    if (this.reconnectToken && this.code) {
+      const token = this.reconnectToken;
       if (intent.type === 'joinOpen') {
         this.socket.emit(
           MSG.joinOpen,
           intent.name
-            ? { tableId: this.code, playerId: this.playerId, name: intent.name }
-            : { tableId: this.code, playerId: this.playerId },
+            ? { tableId: this.code, reconnectToken: token, name: intent.name }
+            : { tableId: this.code, reconnectToken: token },
         );
       } else {
         this.socket.emit(
           MSG.join,
           intent.name
-            ? { roomId: this.code, playerId: this.playerId, name: intent.name }
-            : { roomId: this.code, playerId: this.playerId },
+            ? { roomId: this.code, reconnectToken: token, name: intent.name }
+            : { roomId: this.code, reconnectToken: token },
         );
       }
       return;
@@ -168,6 +172,7 @@ export class NetworkTransport implements Transport {
     this.stateVersion = 0;
     this.pendingActionId = null;
     this.playerId = null;
+    this.reconnectToken = null;
     this.emit(null, []);
   }
 

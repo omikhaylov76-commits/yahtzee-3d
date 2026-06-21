@@ -228,8 +228,14 @@ export function createGameStore(
         onStatus: (onlineStatus) =>
           // 'kicked' терминален и приходит, пока мы в лобби: гасим `lobby`, чтобы роутер увёл из
           // LobbyScreen на OnlineScreen со статусом (там покажется «хозяин удалил вас»). (2.2.c-1)
+          // 'gone' (2.4.c-1) приходит ПОСЛЕ старта (реконнект в исчезнувшую/завершённую комнату): гасим и
+          // лобби, и состояние игры (state=null) — роутер уведёт из GameScreen на экран входа с «партия завершена».
           store.setState(
-            onlineStatus === 'kicked' ? { onlineStatus, lobby: null } : { onlineStatus },
+            onlineStatus === 'gone'
+              ? { onlineStatus, lobby: null, state: null, connectedIds: null }
+              : onlineStatus === 'kicked'
+                ? { onlineStatus, lobby: null }
+                : { onlineStatus },
           ),
         onLobby: (lobby) => store.setState({ lobby }),
         onPresence: (connected) => store.setState({ connectedIds: connected }), // 2.2.d-2: «остался один»

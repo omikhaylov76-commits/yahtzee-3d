@@ -28,6 +28,7 @@ function seat(playerId: string, over: Partial<Seat> = {}): Seat {
   return {
     socketId: `sock-${playerId}`,
     playerId,
+    reconnectToken: `rt-${playerId}`, // секретный токен места (2.4.c-1): reclaim по нему, не по playerId
     name: playerId,
     isHost: false,
     ready: false,
@@ -41,28 +42,29 @@ function room(seats: Seat[], game: Room['game'] = null): Room {
 }
 
 describe('findReclaimSeat', () => {
-  it('находит удерживаемое место по playerId (socketId===null)', () => {
+  it('находит удерживаемое место по reconnectToken (socketId===null)', () => {
     const r = room([
       seat('seat-aaa', { socketId: 'sock-A', name: 'A' }),
       seat('seat-bbb', { socketId: null, name: 'B' }),
     ]);
-    expect(findReclaimSeat(r, 'seat-bbb')?.playerId).toBe('seat-bbb');
+    expect(findReclaimSeat(r, 'rt-seat-bbb')?.playerId).toBe('seat-bbb');
   });
 
-  it('находит место по playerId даже если оно ещё «живое» (гонка ping-timeout)', () => {
+  it('находит место по токену даже если оно ещё «живое» (гонка ping-timeout)', () => {
     const r = room([seat('seat-bbb', { socketId: 'old-sock', name: 'B' })]);
-    expect(findReclaimSeat(r, 'seat-bbb')?.socketId).toBe('old-sock');
+    expect(findReclaimSeat(r, 'rt-seat-bbb')?.socketId).toBe('old-sock');
   });
 
-  it('пустой playerId → undefined (обычный fresh-join)', () => {
+  it('пустой токен → undefined (обычный fresh-join)', () => {
     const r = room([seat('seat-bbb', { socketId: null })]);
     expect(findReclaimSeat(r, undefined)).toBeUndefined();
     expect(findReclaimSeat(r, '')).toBeUndefined();
   });
 
-  it('неизвестный playerId → undefined', () => {
+  it('неизвестный токен / публичный playerId → undefined (по playerId место НЕ угнать, 2.4.c-1)', () => {
     const r = room([seat('seat-bbb', { socketId: null })]);
-    expect(findReclaimSeat(r, 'seat-zzz')).toBeUndefined();
+    expect(findReclaimSeat(r, 'rt-zzz')).toBeUndefined();
+    expect(findReclaimSeat(r, 'seat-bbb')).toBeUndefined(); // публичный playerId НЕ реклеймит место
   });
 });
 

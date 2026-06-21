@@ -62,25 +62,37 @@ describe('NetworkTransport — вход и состояние', () => {
     s.server('connect', undefined);
     expect(s.sent[0]).toEqual({ event: MSG.create, payload: { name: 'Alice' } });
 
-    // Сервер выдал код в joined -> реконнект входит уже по этому коду с playerId (reclaim).
-    s.server(MSG.joined, { roomId: 'K7Q9ZP', playerId: 'seat-xyz', seat: 0, isHost: true });
+    // Сервер выдал код+токен в joined -> реконнект reclaim-ит по коду с СЕКРЕТНЫМ токеном (2.4.c-1).
+    s.server(MSG.joined, {
+      roomId: 'K7Q9ZP',
+      playerId: 'seat-xyz',
+      seat: 0,
+      isHost: true,
+      reconnectToken: 'rt-xyz',
+    });
     s.server('connect', undefined);
     expect(s.sent.filter((m) => m.event === MSG.join).map((m) => m.payload)).toEqual([
-      { roomId: 'K7Q9ZP', playerId: 'seat-xyz', name: 'Alice' }, // имя пробрасывается в reclaim-join
+      { roomId: 'K7Q9ZP', reconnectToken: 'rt-xyz', name: 'Alice' }, // имя пробрасывается в reclaim
     ]);
     expect(t.getPlayerId()).toBe('seat-xyz');
   });
 
-  it('реконнект пере-входит в то же место с playerId (reclaim)', () => {
+  it('реконнект пере-входит в то же место по reconnectToken (reclaim)', () => {
     const s = new FakeSocket();
     const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
-    s.server('connect', undefined); // первый вход — без playerId
-    s.server(MSG.joined, { roomId: 'dev', playerId: 'seat-abc', seat: 0, isHost: false });
-    s.server('connect', undefined); // реконнект — несём playerId для reclaim
+    s.server('connect', undefined); // первый вход — без токена
+    s.server(MSG.joined, {
+      roomId: 'dev',
+      playerId: 'seat-abc',
+      seat: 0,
+      isHost: false,
+      reconnectToken: 'rt-abc',
+    });
+    s.server('connect', undefined); // реконнект — несём СЕКРЕТНЫЙ токен для reclaim
 
     const joins = s.sent.filter((m) => m.event === MSG.join).map((m) => m.payload);
     expect(joins[0]).toEqual({ roomId: 'dev' });
-    expect(joins[1]).toEqual({ roomId: 'dev', playerId: 'seat-abc' });
+    expect(joins[1]).toEqual({ roomId: 'dev', reconnectToken: 'rt-abc' });
     expect(t.getPlayerId()).toBe('seat-abc');
   });
 
@@ -136,11 +148,17 @@ describe('NetworkTransport — вход и состояние', () => {
       payload: { tableId: 'house-1', name: 'Mike' },
     });
 
-    s.server(MSG.joined, { roomId: 'house-1', playerId: 'seat-h', seat: 1, isHost: false });
-    s.server('connect', undefined); // реконнект → joinOpen с playerId (reclaim идущей партии)
+    s.server(MSG.joined, {
+      roomId: 'house-1',
+      playerId: 'seat-h',
+      seat: 1,
+      isHost: false,
+      reconnectToken: 'rt-h',
+    });
+    s.server('connect', undefined); // реконнект → joinOpen с токеном (reclaim идущей партии)
     expect(s.sent.filter((m) => m.event === MSG.joinOpen).map((m) => m.payload)).toEqual([
       { tableId: 'house-1', name: 'Mike' },
-      { tableId: 'house-1', playerId: 'seat-h', name: 'Mike' },
+      { tableId: 'house-1', reconnectToken: 'rt-h', name: 'Mike' },
     ]);
     expect(t.getPlayerId()).toBe('seat-h');
   });
@@ -256,7 +274,13 @@ describe('NetworkTransport — denied и reset', () => {
   it('room:reset гасит состояние и уведомляет (null, []), НЕ роняя сокет (реванш)', () => {
     const s = new FakeSocket();
     const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds());
-    s.server(MSG.joined, { roomId: 'dev', playerId: 'seat-abc', seat: 0, isHost: false });
+    s.server(MSG.joined, {
+      roomId: 'dev',
+      playerId: 'seat-abc',
+      seat: 0,
+      isHost: false,
+      reconnectToken: 'rt-abc',
+    });
     s.server(MSG.state, snapshot(3));
     const got: { state: GameState | null; events: DomainEvent[] }[] = [];
     t.subscribe((state, events) => got.push({ state, events }));
