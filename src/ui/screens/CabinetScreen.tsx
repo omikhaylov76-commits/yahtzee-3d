@@ -150,6 +150,13 @@ export function CabinetScreen() {
               Best solo (this device): <b>{soloBest}</b>
             </p>
           )}
+          <Button
+            variant="ghost"
+            className="cabinet__signout"
+            onClick={() => setView('leaderboard')}
+          >
+            View leaderboard
+          </Button>
         </section>
 
         <section className="cabinet__section">

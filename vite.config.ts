@@ -9,6 +9,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/tables': 'http://localhost:3001',
+      '/leaderboard': 'http://localhost:3001',
     },
   },
 });

@@ -1879,3 +1879,65 @@ body {
   font-size: clamp(32px, 8vw, 52px);
   text-shadow: 0 0 28px rgba(203, 255, 252, 0.18);
 }
+
+/* ───────── Лидерборд (2.4.a-2, ADR-0018) ───────── */
+.menu__leaderboard {
+  align-self: center;
+}
+.lb-wrap {
+  width: 100%;
+  overflow-x: auto; /* узкий экран — таблица прокручивается, а не ломается */
+}
+.lb {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.lb th,
+.lb td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--hairline-row);
+  white-space: nowrap;
+}
+.lb th {
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.lb tbody tr:last-child td {
+  border-bottom: 0;
+}
+.lb__rank {
+  width: 28px;
+  text-align: center;
+  color: var(--text-dim);
+}
+.lb__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.lb__player {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.lb__avatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--hairline);
+  background: var(--surface-2);
+}
+.lb__avatar--ph {
+  display: inline-block;
+}
+.lb__name {
+  color: var(--ice);
+  font-weight: 600;
+}

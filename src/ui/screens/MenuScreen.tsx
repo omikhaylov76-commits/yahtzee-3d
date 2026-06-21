@@ -50,6 +50,14 @@ export function MenuScreen() {
           </button>
         </nav>
 
+        <button
+          type="button"
+          className="menu__signin menu__leaderboard"
+          onClick={() => setView('leaderboard')}
+        >
+          🏆 Leaderboard
+        </button>
+
         <div className="menu__account">
           {user ? (
             <>
