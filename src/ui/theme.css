@@ -1933,16 +1933,16 @@ body {
   font-size: 15px;
   color: var(--text-dim);
 }
-/* Подиум: №1 — сиреневый (празднично, дозированно), №2 — ice, №3 — teal, дальше dim. */
+/* Подиум металлами: золото / серебро / бронза (рационировано — только топ-3, дальше dim). */
 .lb__rank--1 {
-  color: var(--lilac);
-  text-shadow: 0 0 12px rgba(253, 233, 255, 0.6);
+  color: #f5cb5c;
+  text-shadow: 0 0 12px rgba(245, 203, 92, 0.5);
 }
 .lb__rank--2 {
-  color: var(--ice);
+  color: #cdd6d6;
 }
 .lb__rank--3 {
-  color: var(--teal-dot);
+  color: #c98a5e;
 }
 .lb__avatar {
   flex: none;
@@ -1980,11 +1980,20 @@ body {
   font-size: 16px;
   color: var(--heading);
 }
-/* Корона чемпиона — тёплое золото (контраст к teal-палитре, классика «1-го места»). */
-.lb__crown {
+/* Аватар-обёртка: чтобы «надеть» корону на кружок. */
+.lb__ava {
+  position: relative;
   flex: none;
+}
+/* Корона чемпиона — золотая, надета на верх аватара и слегка наклонена. */
+.lb__crown {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%) rotate(-18deg);
   color: #f5cb5c;
-  filter: drop-shadow(0 0 6px rgba(245, 203, 92, 0.6));
+  filter: drop-shadow(0 0 5px rgba(245, 203, 92, 0.55));
+  pointer-events: none;
 }
 .lb__meta {
   font-size: 11px;

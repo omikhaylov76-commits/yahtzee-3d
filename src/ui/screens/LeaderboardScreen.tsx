@@ -57,32 +57,34 @@ export function LeaderboardScreen() {
                   <span className={`lb__rank lb__rank--${i < 3 ? i + 1 : 'n'}`} aria-hidden="true">
                     {i + 1}
                   </span>
-                  {r.avatarUrl ? (
-                    <img
-                      className="lb__avatar"
-                      src={r.avatarUrl}
-                      alt=""
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <span className="lb__avatar" aria-hidden="true">
-                      {r.nickname.slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
+                  <span className="lb__ava">
+                    {r.avatarUrl ? (
+                      <img
+                        className="lb__avatar"
+                        src={r.avatarUrl}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="lb__avatar" aria-hidden="true">
+                        {r.nickname.slice(0, 1).toUpperCase()}
+                      </span>
+                    )}
+                    {i === 0 && (
+                      <svg
+                        className="lb__crown"
+                        viewBox="0 0 24 24"
+                        width="16"
+                        height="16"
+                        aria-hidden="true"
+                      >
+                        <path fill="currentColor" d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5z" />
+                      </svg>
+                    )}
+                  </span>
                   <div className="lb__who">
                     <span className="lb__name">
                       <span className="lb__name-text">{r.nickname}</span>
-                      {i === 0 && (
-                        <svg
-                          className="lb__crown"
-                          viewBox="0 0 24 24"
-                          width="14"
-                          height="14"
-                          aria-hidden="true"
-                        >
-                          <path fill="currentColor" d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5z" />
-                        </svg>
-                      )}
                     </span>
                     <span className="lb__meta data">
                       Best {r.best} · {r.played} {r.played === 1 ? 'game' : 'games'} · {r.wins}{' '}
