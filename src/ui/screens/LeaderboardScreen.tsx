@@ -74,8 +74,8 @@ export function LeaderboardScreen() {
                       <svg
                         className="lb__crown"
                         viewBox="0 0 24 24"
-                        width="16"
-                        height="16"
+                        width="24"
+                        height="24"
                         aria-hidden="true"
                       >
                         <path fill="currentColor" d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5z" />

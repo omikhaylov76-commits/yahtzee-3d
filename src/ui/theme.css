@@ -1985,14 +1985,16 @@ body {
   position: relative;
   flex: none;
 }
-/* Корона чемпиона — золотая, надета на верх аватара и слегка наклонена. */
+/* Корона чемпиона — золотая, крупнее и надета на верх кружка (основание садится на аватар), лёгкий наклон. */
 .lb__crown {
   position: absolute;
-  top: -10px;
+  top: -12px;
   left: 50%;
-  transform: translateX(-50%) rotate(-18deg);
+  width: 24px;
+  height: 24px;
+  transform: translateX(-50%) rotate(-10deg);
   color: #f5cb5c;
-  filter: drop-shadow(0 0 5px rgba(245, 203, 92, 0.55));
+  filter: drop-shadow(0 0 5px rgba(245, 203, 92, 0.6));
   pointer-events: none;
 }
 .lb__meta {
