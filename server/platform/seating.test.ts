@@ -15,6 +15,7 @@ import {
   lobbySnapshot,
   MIN_TO_START,
   publicTables,
+  readyTimeoutAction,
   resetRoomToLobby,
   ROOM_CAPACITY,
   seatName,
@@ -30,6 +31,7 @@ function seat(playerId: string, over: Partial<Seat> = {}): Seat {
     name: playerId,
     isHost: false,
     ready: false,
+    notReadySince: null,
     ...over,
   };
 }
@@ -286,5 +288,27 @@ describe('publicTables', () => {
 
   it('приватные не попадают в список (нет утечки кода)', () => {
     expect(publicTables([room([seat('a')])])).toEqual([]);
+  });
+});
+
+describe('readyTimeoutAction', () => {
+  it('готовое место — не трогаем (null)', () => {
+    expect(readyTimeoutAction(seat('a', { ready: true }), 1000, 60_000)).toBeNull();
+  });
+
+  it('не-готовое без метки → stamp (засечь время)', () => {
+    expect(readyTimeoutAction(seat('a', { ready: false, notReadySince: null }), 1000, 60_000)).toBe(
+      'stamp',
+    );
+  });
+
+  it('не-готовое в пределах таймаута → null (ещё ждём)', () => {
+    const s = seat('a', { ready: false, notReadySince: 1000 });
+    expect(readyTimeoutAction(s, 1000 + 30_000, 60_000)).toBeNull();
+  });
+
+  it('не-готовое дольше таймаута → free (освободить место)', () => {
+    const s = seat('a', { ready: false, notReadySince: 1000 });
+    expect(readyTimeoutAction(s, 1000 + 60_001, 60_000)).toBe('free');
   });
 });

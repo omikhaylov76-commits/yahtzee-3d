@@ -21,6 +21,11 @@ export interface Seat {
   isHost: boolean;
   /** Готов к старту по согласию (ADR-0016, ready-up в open/persistent). Тоггл сообщением — в 2.5.b. */
   ready: boolean;
+  /**
+   * Когда место стало НЕ-готовым в open/persistent лобби (мс), иначе null. Предохранитель залипших
+   * (2.5.e): sweeper освобождает место, простоявшее не-готовым дольше таймаута. Снимается при `ready`.
+   */
+  notReadySince: number | null;
   /** Залогиненный аккаунт (2.3.c-3): userId платформы или null (гость). Для статистики/лидерборда (2.3.e). */
   userId?: string | null;
 }
@@ -105,9 +110,27 @@ export function ensureHost(room: Room): Seat | undefined {
 export function resetRoomToLobby(room: Room): void {
   room.game = null;
   room.seats = room.seats.filter((s) => s.socketId !== null);
-  for (const s of room.seats) s.ready = false;
+  for (const s of room.seats) {
+    s.ready = false;
+    s.notReadySince = null; // предохранитель отсчитает заново со следующего тика (2.5.e)
+  }
   room.emptiedAt = null;
   ensureHost(room);
+}
+
+/**
+ * Предохранитель залипших (2.5.e): что сделать с НЕ-готовым местом open/persistent лобби. Ленивый отсчёт:
+ * первый раз — `stamp` (засечь время), позже — `free` (освободить), если простояло не-готовым дольше
+ * `timeoutMs`. Готовое место — `null` (не трогаем). Чистая → тестируема; применяет sweeper в realtime.
+ */
+export function readyTimeoutAction(
+  seat: Seat,
+  now: number,
+  timeoutMs: number,
+): 'stamp' | 'free' | null {
+  if (seat.ready) return null;
+  if (seat.notReadySince === null) return 'stamp';
+  return now - seat.notReadySince > timeoutMs ? 'free' : null;
 }
 
 /** Дежурные (persistent) столы сервера (ADR-0017): 5 постоянных, морская тема в тон Auros. */

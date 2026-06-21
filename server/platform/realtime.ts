@@ -40,6 +40,7 @@ import {
   HOUSE_TABLES,
   lobbySnapshot,
   publicTables,
+  readyTimeoutAction,
   resetRoomToLobby,
   ROOM_CAPACITY,
   seatName,
@@ -70,6 +71,8 @@ const MAX_JOIN_FAILS = 10; // анти-перебор кода: после се�
 const JOIN_LOCK_MS = 30_000;
 const MAX_CREATE_PER_SOCKET = 20; // анти-спам создания комнат с одного соединения
 const MAX_MSG_BYTES = 4096; // лимит размера любого сокет-сообщения (анти-абьюз)
+const READY_TIMEOUT_MS = 60_000; // предохранитель (2.5.e): не-готовое место open/persistent лобби освобождаем
+const MAX_OPEN_PER_SOCKET = 3; // анти-спам (2.5.e): открытых столов на сокет (видны всем → строже общего cap)
 
 /** Безопасный снимок для `/status` (2.P.2): ТОЛЬКО агрегаты — без кодов комнат и имён игроков. */
 export interface StatusSnapshot {
@@ -194,6 +197,31 @@ export function attachRealtime(
     for (const [id, room] of rooms) {
       const noLive = room.seats.length === 0 || room.seats.every((s) => s.socketId === null);
       if (room.game === null) {
+        // Предохранитель залипших (2.5.e): освобождаем НЕ-готовые места open/persistent лобби, простоявшие
+        // дольше таймаута (ленивый отсчёт через notReadySince) — один молчун не должен блокировать стол.
+        if (room.visibility !== 'private') {
+          let freed = false;
+          for (const s of [...room.seats]) {
+            const act = readyTimeoutAction(s, now, READY_TIMEOUT_MS);
+            if (act === 'stamp') {
+              s.notReadySince = now;
+            } else if (act === 'free') {
+              room.seats = room.seats.filter((x) => x !== s);
+              freed = true;
+              if (s.socketId) {
+                const vs = io.sockets.sockets.get(s.socketId);
+                vs?.emit(MSG.kicked, { roomId: id }); // освобождён за бездействие — клиент уйдёт на вход
+                vs?.leave(id);
+                sockets.delete(s.socketId);
+              }
+              log.info({ roomId: id, playerId: s.playerId }, 'inactive (not-ready) seat freed');
+            }
+          }
+          if (freed) {
+            ensureHost(room);
+            broadcastLobby(room);
+          }
+        }
         // Дежурный (persistent) стол не сносим — пустое лобби живёт всегда (ADR-0017).
         if (room.visibility === 'persistent') continue;
         if (noLive || now - room.createdAt > LOBBY_TTL_MS) {
@@ -232,6 +260,7 @@ export function attachRealtime(
     let joinFails = 0;
     let joinLockedUntil = 0;
     let roomsCreated = 0;
+    let openCreated = 0; // открытых столов создано этим сокетом (под-лимит, 2.5.e)
 
     /** Засчитать неуспешный join (анти-перебор кода): после серии неудач — временный лок сокета. */
     function failJoin(now: number): void {
@@ -261,6 +290,7 @@ export function attachRealtime(
         name,
         isHost,
         ready: false, // готовность подтверждается в лобби (ready-up для open/persistent, 2.5.b)
+        notReadySince: null, // предохранитель проставит при простое не-готовым (2.5.e)
         userId: sessionUser?.userId ?? null,
       });
       sockets.set(socket.id, { roomId: room.id, playerId });
@@ -307,6 +337,11 @@ export function attachRealtime(
       }
       // open=true → открытый стол (в списке, вход без кода, старт по готовности); иначе приватный по коду (2.2).
       const open = parsed.data.open === true;
+      if (open && openCreated >= MAX_OPEN_PER_SOCKET) {
+        log.warn({ openCreated }, 'refusing open-table create (per-socket cap, 2.5.e)');
+        socket.emit(MSG.full, { roomId: '' }); // переиспользуем «занято/перегружен» (UI — 2.2.a-3)
+        return;
+      }
       const room: Room = {
         id: code,
         visibility: open ? 'open' : 'private',
@@ -318,6 +353,7 @@ export function attachRealtime(
       };
       rooms.set(code, room);
       roomsCreated++;
+      if (open) openCreated++;
       // Приватная — создатель хозяин (host-Start, 2.2); открытая — без хозяина (старт по готовности, ADR-0016).
       const joined = addSeat(room, parsed.data.name, !open);
       if (open && !room.title) room.title = `${room.seats[0].name}'s table`; // дефолт названия из имени
@@ -479,8 +515,9 @@ export function attachRealtime(
       const me = room.seats.find((s) => s.playerId === ctx.playerId);
       if (!me) return;
       me.ready = parsed.data.ready;
+      if (parsed.data.ready) me.notReadySince = null; // готов — предохранитель не считает (2.5.e)
       broadcastLobby(room);
-      if (allReadyToStart(room)) startRoom(room, 'ready'); // предохранитель залипших — e
+      if (allReadyToStart(room)) startRoom(room, 'ready');
     });
 
     // «Play again» в открытом/дежурном столе (ADR-0016, 2.5.d-3b): после game:over игрок жмёт реванш →
