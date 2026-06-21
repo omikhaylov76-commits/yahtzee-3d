@@ -1884,60 +1884,130 @@ body {
 .menu__leaderboard {
   align-self: center;
 }
-.lb-wrap {
-  width: 100%;
-  overflow-x: auto; /* узкий экран — таблица прокручивается, а не ломается */
+/* Шире узкой онлайн-колонки — рейтингу нужно место (и так уходит горизонтальный скролл). */
+.online-entry.leaderboard {
+  width: min(680px, 100%);
 }
+/* Рейтинг — ранжированные карточки (а не таблица-Excel): порядок несёт <ol>; перенос меты вместо скролла. */
 .lb {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
 }
-.lb th,
-.lb td {
-  padding: 8px 10px;
-  text-align: left;
-  border-bottom: 1px solid var(--hairline-row);
-  white-space: nowrap;
-}
-.lb th {
-  font-family: var(--font-body);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.lb tbody tr:last-child td {
-  border-bottom: 0;
-}
-.lb__rank {
-  width: 28px;
-  text-align: center;
-  color: var(--text-dim);
-}
-.lb__num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.lb__player {
+.lb__row {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
+  gap: var(--s-4);
+  padding: var(--s-3) var(--s-5);
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  transition:
+    border-color 0.14s ease,
+    transform 0.1s ease;
+}
+.lb__row:hover {
+  border-color: rgba(237, 255, 254, 0.4);
+}
+/* Лидер — «трон»: тонкое teal-свечение, чуть весомее (мотив «обсерватории» Auros). */
+.lb__row.is-leader {
+  border-color: rgba(0, 179, 166, 0.5);
+  background:
+    linear-gradient(180deg, rgba(0, 179, 166, 0.1), rgba(0, 179, 166, 0) 60%), var(--surface-2);
+  box-shadow: 0 0 30px -12px rgba(0, 179, 166, 0.55);
+}
+.lb__rank {
+  flex: none;
+  width: 26px;
+  text-align: center;
+  font-family: var(--font-data);
+  font-size: 15px;
+  color: var(--text-dim);
+}
+/* Подиум: №1 — сиреневый (празднично, дозированно), №2 — ice, №3 — teal, дальше dim. */
+.lb__rank--1 {
+  color: var(--lilac);
+  text-shadow: 0 0 12px rgba(253, 233, 255, 0.6);
+}
+.lb__rank--2 {
+  color: var(--ice);
+}
+.lb__rank--3 {
+  color: var(--teal-dot);
 }
 .lb__avatar {
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   object-fit: cover;
+  display: grid;
+  place-items: center;
   border: 1px solid var(--hairline);
-  background: var(--surface-2);
+  background: var(--surface);
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--ice);
 }
-.lb__avatar--ph {
-  display: inline-block;
+.lb__who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 .lb__name {
-  color: var(--ice);
+  font-family: var(--font-display);
   font-weight: 600;
+  font-size: 16px;
+  color: var(--heading);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lb__meta {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+}
+/* Очки — главный акцент (метрика сортировки): крупный моно с лёгким свечением. */
+.lb__points {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1;
+}
+.lb__points-num {
+  font-size: 22px;
+  color: var(--ice);
+  text-shadow: 0 0 14px rgba(203, 255, 252, 0.3);
+}
+.lb__row.is-leader .lb__points-num {
+  font-size: 27px;
+}
+.lb__points-label {
+  margin-top: 2px;
+  font-family: var(--font-body);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+@media (max-width: 460px) {
+  .lb__row {
+    gap: var(--s-3);
+    padding: var(--s-3) var(--s-4);
+  }
+  .lb__avatar {
+    width: 30px;
+    height: 30px;
+  }
+  .lb__points-num {
+    font-size: 20px;
+  }
 }

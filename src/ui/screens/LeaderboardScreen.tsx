@@ -46,54 +46,42 @@ export function LeaderboardScreen() {
         )}
 
         {status === 'ready' && rows.length > 0 && (
-          <div className="lb-wrap">
-            <table className="lb">
-              <thead>
-                <tr>
-                  <th scope="col" className="lb__rank">
-                    #
-                  </th>
-                  <th scope="col">Player</th>
-                  <th scope="col" className="lb__num">
-                    Points
-                  </th>
-                  <th scope="col" className="lb__num">
-                    Best
-                  </th>
-                  <th scope="col" className="lb__num">
-                    Played
-                  </th>
-                  <th scope="col" className="lb__num">
-                    Wins
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={`${r.nickname}-${i}`}>
-                    <td className="lb__rank data">{i + 1}</td>
-                    <td className="lb__player">
-                      {r.avatarUrl ? (
-                        <img
-                          className="lb__avatar"
-                          src={r.avatarUrl}
-                          alt=""
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <span className="lb__avatar lb__avatar--ph" aria-hidden="true" />
-                      )}
-                      <span className="lb__name">{r.nickname}</span>
-                    </td>
-                    <td className="lb__num data">{r.points}</td>
-                    <td className="lb__num data">{r.best}</td>
-                    <td className="lb__num data">{r.played}</td>
-                    <td className="lb__num data">{r.wins}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ol className="lb" aria-label="Top players by total points">
+            {rows.map((r, i) => (
+              <li
+                key={`${r.nickname}-${i}`}
+                className={`lb__row${i === 0 ? ' is-leader' : ''}`}
+                aria-label={`#${i + 1} ${r.nickname}: ${r.points} points, best ${r.best}, ${r.played} games, ${r.wins} wins`}
+              >
+                <span className={`lb__rank lb__rank--${i < 3 ? i + 1 : 'n'}`} aria-hidden="true">
+                  {i + 1}
+                </span>
+                {r.avatarUrl ? (
+                  <img
+                    className="lb__avatar"
+                    src={r.avatarUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="lb__avatar" aria-hidden="true">
+                    {r.nickname.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <div className="lb__who">
+                  <span className="lb__name">{r.nickname}</span>
+                  <span className="lb__meta data">
+                    Best {r.best} · {r.played} {r.played === 1 ? 'game' : 'games'} · {r.wins}{' '}
+                    {r.wins === 1 ? 'win' : 'wins'}
+                  </span>
+                </div>
+                <span className="lb__points" aria-hidden="true">
+                  <span className="lb__points-num data">{r.points}</span>
+                  <span className="lb__points-label">pts</span>
+                </span>
+              </li>
+            ))}
+          </ol>
         )}
       </div>
     </Screen>
