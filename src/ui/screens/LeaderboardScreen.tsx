@@ -46,42 +46,57 @@ export function LeaderboardScreen() {
         )}
 
         {status === 'ready' && rows.length > 0 && (
-          <ol className="lb" aria-label="Top players by total points">
-            {rows.map((r, i) => (
-              <li
-                key={`${r.nickname}-${i}`}
-                className={`lb__row${i === 0 ? ' is-leader' : ''}`}
-                aria-label={`#${i + 1} ${r.nickname}: ${r.points} points, best ${r.best}, ${r.played} games, ${r.wins} wins`}
-              >
-                <span className={`lb__rank lb__rank--${i < 3 ? i + 1 : 'n'}`} aria-hidden="true">
-                  {i + 1}
-                </span>
-                {r.avatarUrl ? (
-                  <img
-                    className="lb__avatar"
-                    src={r.avatarUrl}
-                    alt=""
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span className="lb__avatar" aria-hidden="true">
-                    {r.nickname.slice(0, 1).toUpperCase()}
+          <div className="lb-board">
+            <ol className="lb" aria-label="Top players by total points">
+              {rows.map((r, i) => (
+                <li
+                  key={`${r.nickname}-${i}`}
+                  className={`lb__row${i === 0 ? ' is-leader' : ''}`}
+                  aria-label={`#${i + 1} ${r.nickname}: ${r.points} points, best ${r.best}, ${r.played} games, ${r.wins} wins`}
+                >
+                  <span className={`lb__rank lb__rank--${i < 3 ? i + 1 : 'n'}`} aria-hidden="true">
+                    {i + 1}
                   </span>
-                )}
-                <div className="lb__who">
-                  <span className="lb__name">{r.nickname}</span>
-                  <span className="lb__meta data">
-                    Best {r.best} · {r.played} {r.played === 1 ? 'game' : 'games'} · {r.wins}{' '}
-                    {r.wins === 1 ? 'win' : 'wins'}
+                  {r.avatarUrl ? (
+                    <img
+                      className="lb__avatar"
+                      src={r.avatarUrl}
+                      alt=""
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="lb__avatar" aria-hidden="true">
+                      {r.nickname.slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <div className="lb__who">
+                    <span className="lb__name">
+                      <span className="lb__name-text">{r.nickname}</span>
+                      {i === 0 && (
+                        <svg
+                          className="lb__crown"
+                          viewBox="0 0 24 24"
+                          width="14"
+                          height="14"
+                          aria-hidden="true"
+                        >
+                          <path fill="currentColor" d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5z" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="lb__meta data">
+                      Best {r.best} · {r.played} {r.played === 1 ? 'game' : 'games'} · {r.wins}{' '}
+                      {r.wins === 1 ? 'win' : 'wins'}
+                    </span>
+                  </div>
+                  <span className="lb__points" aria-hidden="true">
+                    <span className="lb__points-num data">{r.points}</span>
+                    <span className="lb__points-label">pts</span>
                   </span>
-                </div>
-                <span className="lb__points" aria-hidden="true">
-                  <span className="lb__points-num data">{r.points}</span>
-                  <span className="lb__points-label">pts</span>
-                </span>
-              </li>
-            ))}
-          </ol>
+                </li>
+              ))}
+            </ol>
+          </div>
         )}
       </div>
     </Screen>
