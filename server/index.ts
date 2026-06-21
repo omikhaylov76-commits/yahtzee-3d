@@ -12,6 +12,7 @@ import fastifyCookie from '@fastify/cookie';
 import { PROTOCOL_VERSION } from '../shared/protocol';
 import { yahtzeeModule } from './games/yahtzee';
 import { attachRealtime } from './platform/realtime';
+import { getLeaderboard } from './platform/stats/leaderboard';
 import type { SessionUser } from './platform/auth/sessionResolver';
 import type { MatchRows } from './platform/stats/buildRows';
 
@@ -63,6 +64,10 @@ app.get('/status', async () => getStatus());
 // Публичный список открытых/дежурных столов (ADR-0017, 2.5.d): только агрегаты, без имён игроков и
 // без секретных кодов приватных комнат. Вход в стол из списка — по сокету (joinOpen).
 app.get('/tables', async () => getTables());
+
+// Публичный лидерборд (ADR-0018, 2.4.a): топ по сумме очков честных сетевых партий; только ник+аватар+
+// числа. Без БД (dev/гость) → пустой список (getLeaderboard гейтит по DATABASE_URL).
+app.get('/leaderboard', async () => getLeaderboard());
 
 if (authEnabled) {
   const { createGoogleAuthProvider } = await import('./platform/auth/google');

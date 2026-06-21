@@ -183,3 +183,16 @@ export interface OpenTable {
   capacity: number;
   status: TableStatus;
 }
+
+/**
+ * Строка публичного лидерборда (2.4.a, ADR-0018): ТОЛЬКО ник+аватар+агрегаты честных сетевых партий
+ * (≥2 разных зарегистрированных). Без email/Google-id/имён гостей/кодов. Сортировка — по `points`.
+ */
+export interface LeaderboardRow {
+  nickname: string;
+  avatarUrl: string | null;
+  points: number; // сумма total за все зачётные партии
+  best: number; // лучший total за партию
+  played: number; // сыграно зачётных партий
+  wins: number; // побед (членство в winnerIds; ничья засчитана обоим)
+}
