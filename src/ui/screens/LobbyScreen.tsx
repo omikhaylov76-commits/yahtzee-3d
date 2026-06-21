@@ -19,6 +19,8 @@ export function LobbyScreen() {
   const roomCode = useGameStore((s) => s.roomCode);
   const startGameOnline = useGameStore((s) => s.startGameOnline);
   const kickPlayer = useGameStore((s) => s.kickPlayer);
+  const readyUp = useGameStore((s) => s.readyUp);
+  const setReady = useGameStore((s) => s.setReady);
   const goLocal = useGameStore((s) => s.goLocal);
   const setView = useUiStore((s) => s.setView);
   const [copied, setCopied] = useState(false);
@@ -100,6 +102,9 @@ export function LobbyScreen() {
   // даёт верную роль здесь, и кнопка Start появляется у промотированного игрока (аудит a-2 #1).
   const amHost = mySeat != null && !!lobby.players[mySeat]?.isHost;
   const filled = lobby.players.length;
+  // Ready-up (open/persistent): моя готовность и сколько готовы — для кнопки и подсказки (2.5.b).
+  const myReady = mySeat != null && !!lobby.players[mySeat]?.ready;
+  const readyCount = lobby.players.filter((p) => p.ready).length;
 
   return (
     <Screen className="lobby">
@@ -108,32 +113,43 @@ export function LobbyScreen() {
           ← Leave room
         </button>
 
-        <header className="lobby__head">
-          <Eyebrow>Online · lobby</Eyebrow>
-          <p className="lobby__codelabel">Room code</p>
-          <div className="lobby__codewrap">
-            <span className="lobby__code data">{roomCode}</span>
-            <button
-              type="button"
-              className="lobby__copy"
-              onClick={copy}
-              aria-label="Copy room code"
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-            <button
-              type="button"
-              className="lobby__copy"
-              onClick={share}
-              aria-label="Share invite link"
-            >
-              {shared ? 'Link copied' : 'Share link'}
-            </button>
-          </div>
-          <p className="lobby__sub" role="status" aria-live="polite">
-            {filled} of {lobby.capacity} players · share the code or link to invite more.
-          </p>
-        </header>
+        {readyUp ? (
+          // Открытый/дежурный стол: кода-пропуска нет (вход из списка) — показываем заголовок + счётчик.
+          <header className="lobby__head">
+            <Eyebrow>Online · table</Eyebrow>
+            <h1 className="display lobby__title">Open table</h1>
+            <p className="lobby__sub" role="status" aria-live="polite">
+              {filled} of {lobby.capacity} players · ready up to start.
+            </p>
+          </header>
+        ) : (
+          <header className="lobby__head">
+            <Eyebrow>Online · lobby</Eyebrow>
+            <p className="lobby__codelabel">Room code</p>
+            <div className="lobby__codewrap">
+              <span className="lobby__code data">{roomCode}</span>
+              <button
+                type="button"
+                className="lobby__copy"
+                onClick={copy}
+                aria-label="Copy room code"
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+              <button
+                type="button"
+                className="lobby__copy"
+                onClick={share}
+                aria-label="Share invite link"
+              >
+                {shared ? 'Link copied' : 'Share link'}
+              </button>
+            </div>
+            <p className="lobby__sub" role="status" aria-live="polite">
+              {filled} of {lobby.capacity} players · share the code or link to invite more.
+            </p>
+          </header>
+        )}
 
         <ul className="seats" aria-label="Players in the room">
           {slots.map((_, i) => {
@@ -144,6 +160,9 @@ export function LobbyScreen() {
                 <span className="seat__name">{p ? p.name : 'Waiting…'}</span>
                 {p?.isHost && <span className="seat__badge">host</span>}
                 {p && i === mySeat && <span className="seat__badge seat__badge--you">you</span>}
+                {readyUp && p?.ready && (
+                  <span className="seat__badge seat__badge--ready">ready</span>
+                )}
                 {amHost && p && i !== mySeat && (
                   <button
                     type="button"
@@ -161,7 +180,16 @@ export function LobbyScreen() {
           })}
         </ul>
 
-        {amHost ? (
+        {readyUp ? (
+          <div className="lobby__actions">
+            <Button variant={myReady ? 'default' : 'primary'} onClick={() => setReady(!myReady)}>
+              {myReady ? 'Ready ✓ — tap to cancel' : "I'm ready"}
+            </Button>
+            <p className="lobby__hint" role="status" aria-live="polite">
+              {readyCount} of {filled} ready · everyone ready (2+) starts
+            </p>
+          </div>
+        ) : amHost ? (
           <div className="lobby__actions">
             <Button variant="primary" onClick={startGameOnline} disabled={!lobby.canStart}>
               Start game

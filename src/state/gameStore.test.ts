@@ -124,7 +124,7 @@ describe('gameStore — свап транспорта online↔local (2.1.d-1)',
     let cb: OnlineCallbacks | null = null;
     const make = (_intent: OnlineIntent, callbacks: OnlineCallbacks): OnlineSession => {
       cb = callbacks;
-      return { transport: net, dispose, start, kick };
+      return { transport: net, dispose, start, kick, setReady: vi.fn() };
     };
     const store = createGameStore(local, make);
     return { store, net, dispose, start, kick, status: () => cb?.onStatus ?? null, cb: () => cb };
@@ -271,7 +271,7 @@ describe('gameStore — сетевой гейтинг ввода (2.1.d-3)', () 
     let cb: OnlineCallbacks | null = null;
     const make = (_intent: OnlineIntent, callbacks: OnlineCallbacks): OnlineSession => {
       cb = callbacks;
-      return { transport: net, dispose: vi.fn(), start: vi.fn(), kick: vi.fn() };
+      return { transport: net, dispose: vi.fn(), start: vi.fn(), kick: vi.fn(), setReady: vi.fn() };
     };
     const store = createGameStore(local, make);
     return { store, net, status: () => cb?.onStatus ?? null, cb: () => cb };

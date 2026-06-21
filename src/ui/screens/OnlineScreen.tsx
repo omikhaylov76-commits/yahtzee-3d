@@ -44,6 +44,8 @@ export function OnlineScreen() {
   const [invitedCode] = useState(() => roomCodeFromUrl());
   const [code, setCode] = useState(() => invitedCode ?? '');
   const [override, setOverride] = useState(false); // гость нажал «другой код / создать» → полная форма
+  const [open, setOpen] = useState(false); // создать ОТКРЫТЫЙ стол (в списке, вход без кода) — 2.5.d
+  const [title, setTitle] = useState('');
 
   // Чистим имя тем же общим фильтром, что и сервер (shared/names); серверная очистка всё равно финальна.
   const cleanedName = () => normalizeName(name) || undefined;
@@ -59,7 +61,12 @@ export function OnlineScreen() {
   };
   const create = () => {
     if (needsNick()) return;
-    goOnline({ type: 'create', name: cleanedName() });
+    goOnline({
+      type: 'create',
+      name: cleanedName(),
+      open,
+      title: open ? title.trim() || undefined : undefined,
+    });
   };
   const join = () => {
     if (needsNick()) return;
@@ -220,10 +227,41 @@ export function OnlineScreen() {
         <div className="online-card">
           <div className="online-card__text">
             <span className="online-card__title">Create a room</span>
-            <span className="online-card__desc">Start a new table and get a code to share.</span>
+            <span className="online-card__desc">
+              Private — share a code. Open — anyone joins from the list.
+            </span>
           </div>
+          <div className="count-seg seg-2" role="group" aria-label="Room visibility">
+            <button
+              type="button"
+              className={`count-seg__btn${!open ? ' is-active' : ''}`}
+              aria-pressed={!open}
+              onClick={() => setOpen(false)}
+            >
+              Private
+            </button>
+            <button
+              type="button"
+              className={`count-seg__btn${open ? ' is-active' : ''}`}
+              aria-pressed={open}
+              onClick={() => setOpen(true)}
+            >
+              Open
+            </button>
+          </div>
+          {open && (
+            <input
+              className="player-row__input"
+              type="text"
+              value={title}
+              maxLength={24}
+              placeholder="Table name (optional)"
+              aria-label="Table name"
+              onChange={(e) => setTitle(e.target.value.slice(0, 24))}
+            />
+          )}
           <Button variant="primary" className="online-entry__cta" onClick={create}>
-            Create room
+            {open ? 'Create open table' : 'Create room'}
           </Button>
         </div>
 

@@ -1862,3 +1862,20 @@ body {
 .tables-entry:hover {
   border-color: rgba(237, 255, 254, 0.4);
 }
+
+/* ── Ready-up / открытый стол (2.5.d-3) ── */
+/* Сегмент Private/Open — две колонки (count-seg по умолчанию 4). */
+.count-seg.seg-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+/* Бейдж «ready» у места — teal-акцент (как «you»), сигнал готовности. */
+.seat__badge--ready {
+  border-color: var(--teal-dot);
+  color: var(--ice);
+}
+/* Заголовок лобби открытого стола (нет кода-героя). */
+.lobby__title {
+  margin: 0;
+  font-size: clamp(32px, 8vw, 52px);
+  text-shadow: 0 0 28px rgba(203, 255, 252, 0.18);
+}

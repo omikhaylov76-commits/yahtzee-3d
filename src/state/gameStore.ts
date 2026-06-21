@@ -75,6 +75,8 @@ export interface GameStoreState {
   mySeat: number | null;
   /** Я ли хозяин комнаты (создатель): только хозяин видит активную кнопку Start. */
   isHost: boolean;
+  /** Старт по готовности (open/persistent) vs host-Start (приватная) — из intent в goOnline (2.5.d). */
+  readyUp: boolean;
   /** Код текущей онлайн-комнаты (для шаринга в лобби); null вне онлайна. */
   roomCode: string | null;
   /**
@@ -88,6 +90,8 @@ export interface GameStoreState {
   startGameOnline: () => void;
   /** Хозяин выгоняет игрока из лобби по индексу места (2.2.c-1); сервер проверяет роль. */
   kickPlayer: (seat: number) => void;
+  /** Тоггл своей готовности (2.5.b, ready-up в open/persistent). Сервер стартует, когда все готовы. */
+  setReady: (ready: boolean) => void;
   /** Выйти из онлайна: отключить сетевой транспорт, вернуться на сохранённый локальный. */
   goLocal: () => void;
 }
@@ -213,6 +217,7 @@ export function createGameStore(
     lobby: null,
     mySeat: null,
     isHost: false,
+    readyUp: false,
     roomCode: null,
     connectedIds: null,
     goOnline: (intent) => {
@@ -249,6 +254,8 @@ export function createGameStore(
       set({
         mode: 'online',
         onlineStatus: 'connecting',
+        // Старт по готовности — для открытого/дежурного стола (joinOpen или create с open); приватная — host-Start.
+        readyUp: intent.type === 'joinOpen' || (intent.type === 'create' && intent.open === true),
         lobby: null,
         mySeat: null,
         isHost: false,
@@ -261,6 +268,9 @@ export function createGameStore(
     },
     kickPlayer: (seat) => {
       session?.kick(seat);
+    },
+    setReady: (ready) => {
+      session?.setReady(ready);
     },
     goLocal: () => {
       if (get().mode === 'local') return;
@@ -278,6 +288,7 @@ export function createGameStore(
         lobby: null,
         mySeat: null,
         isHost: false,
+        readyUp: false,
         roomCode: null,
         connectedIds: null,
       });

@@ -70,6 +70,8 @@ export interface OnlineSession {
   start: () => void;
   /** Выгнать игрока из лобби по индексу места (только хозяин; сервер проверяет роль). Сессионное (2.2.c-1). */
   kick: (seat: number) => void;
+  /** Тоггл готовности своего места (2.5.b, ready-up в open/persistent). Сессионное действие. */
+  setReady: (ready: boolean) => void;
   /** Завершить сессию: отключить сокет и обнулить транспорт (вызывается при выходе в меню). */
   dispose: () => void;
 }
@@ -158,6 +160,7 @@ export function createOnlineSession(intent: OnlineIntent, cb: OnlineCallbacks): 
     transport,
     start: () => socket.emit(MSG.start),
     kick: (seat) => socket.emit(MSG.kick, { seat }),
+    setReady: (ready) => socket.emit(MSG.ready, { ready }),
     dispose: () => {
       terminal = true; // глушим поздние статус-эмиты (disconnect-хендлер после teardown — не 'connecting')
       transport.reset(); // reset() отключает сокет и помечает транспорт мёртвым (2.1.c)

@@ -32,7 +32,7 @@ export interface TransportSocket {
  * существующую по коду. Имя — опционально (сервер чистит его `cleanName`; полная валидация — 2.2.b).
  */
 export type OnlineIntent =
-  | { type: 'create'; name?: string }
+  | { type: 'create'; name?: string; open?: boolean; title?: string } // open=true → открытый стол (2.5.d)
   | { type: 'join'; code: string; name?: string }
   | { type: 'joinOpen'; tableId: string; name?: string }; // вход в открытый/дежурный стол по id (2.5.d)
 
@@ -126,7 +126,11 @@ export class NetworkTransport implements Transport {
     }
     // Первый вход по намерению.
     if (intent.type === 'create') {
-      this.socket.emit(MSG.create, intent.name ? { name: intent.name } : {});
+      // Открытый стол (2.5.d): передаём open+title; иначе приватный по коду (как 2.2).
+      this.socket.emit(MSG.create, {
+        ...(intent.name ? { name: intent.name } : {}),
+        ...(intent.open ? { open: true, ...(intent.title ? { title: intent.title } : {}) } : {}),
+      });
     } else if (intent.type === 'joinOpen') {
       this.socket.emit(
         MSG.joinOpen,
