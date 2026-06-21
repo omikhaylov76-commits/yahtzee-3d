@@ -12,8 +12,31 @@ import type { Action, DomainEvent, GameState } from '../core';
 import type { OnlineCallbacks, OnlineSession } from '../platform/net';
 import { uiStore } from './uiStore';
 import type { OnlineIntent } from '../transport/NetworkTransport';
+import { loadResume } from '../platform/resumeSession';
 
 const players = [{ name: 'A' }, { name: 'B' }];
+
+// node-окружение vitest без DOM: подменяем sessionStorage in-memory — для проверки resume-on-reload (2.4.c-3-3).
+vi.stubGlobal(
+  'sessionStorage',
+  (() => {
+    const mem = new Map<string, string>();
+    return {
+      get length() {
+        return mem.size;
+      },
+      clear: () => mem.clear(),
+      getItem: (k: string) => mem.get(k) ?? null,
+      key: (i: number) => [...mem.keys()][i] ?? null,
+      removeItem: (k: string) => {
+        mem.delete(k);
+      },
+      setItem: (k: string, v: string) => {
+        mem.set(k, v);
+      },
+    };
+  })(),
+);
 
 function freshStore() {
   const storage = new MemoryGameStorage();
@@ -418,6 +441,103 @@ describe('gameStore — сетевой гейтинг ввода (2.1.d-3)', () 
     const ctx = enterOnline('A', 'B'); // ход B, presence ещё не пришёл
     expect(ctx.store.getState().connectedIds).toBeNull();
     expect(selectWaitingFor(ctx.store.getState())).toBeNull();
+  });
+
+  it('resume-on-reload (2.4.c-3-3): сохраняет секрет в активной партии, чистит на game:over', () => {
+    sessionStorage.clear();
+    const ctx = onlineStore();
+    ctx.store.getState().goOnline({ type: 'joinOpen', tableId: 'tide' }, null);
+    ctx
+      .cb()
+      ?.onJoined({ roomId: 'tide', playerId: 'A', seat: 0, isHost: false, reconnectToken: 'rt-1' });
+    ctx.status()?.('playing');
+    ctx.net.push(netState('A')); // партия идёт → секрет сохранён для F5
+    expect(loadResume()).toEqual({ type: 'joinOpen', roomId: 'tide', token: 'rt-1' });
+    // game:over → резюм больше не нужен (перезагрузка должна вести в меню, а не в законченную партию)
+    ctx.net.push({
+      players: [{ id: 'A', name: 'A' }],
+      current: 0,
+      phase: 'over',
+    } as unknown as GameState);
+    expect(loadResume()).toBeNull();
+  });
+
+  it('resume-on-reload: goLocal (выход в меню) чистит секрет реклейма (2.4.c-3-3)', () => {
+    sessionStorage.clear();
+    const ctx = onlineStore();
+    ctx.store.getState().goOnline({ type: 'join', code: 'AB12CD' }, null);
+    ctx.cb()?.onJoined({
+      roomId: 'AB12CD',
+      playerId: 'A',
+      seat: 0,
+      isHost: true,
+      reconnectToken: 'rt-2',
+    });
+    ctx.status()?.('playing');
+    ctx.net.push(netState('A'));
+    expect(loadResume()).not.toBeNull();
+    ctx.store.getState().goLocal();
+    expect(loadResume()).toBeNull();
+  });
+
+  it('resume-on-reload: терминальный gone чистит секрет реклейма (2.4.c-3-3)', () => {
+    sessionStorage.clear();
+    const ctx = onlineStore();
+    ctx.store.getState().goOnline({ type: 'join', code: 'AB12CD' }, null);
+    ctx.cb()?.onJoined({
+      roomId: 'AB12CD',
+      playerId: 'A',
+      seat: 0,
+      isHost: true,
+      reconnectToken: 'rt-3',
+    });
+    ctx.status()?.('playing');
+    ctx.net.push(netState('A'));
+    expect(loadResume()).not.toBeNull();
+    ctx.status()?.('gone'); // реклейм в исчезнувшую комнату → терминал, секрет стираем
+    expect(loadResume()).toBeNull();
+  });
+
+  it('resume-on-reload: терминальный mismatch чистит секрет реклейма (2.4.c-3-3)', () => {
+    sessionStorage.clear();
+    const ctx = onlineStore();
+    ctx.store.getState().goOnline({ type: 'join', code: 'AB12CD' }, null);
+    ctx
+      .cb()
+      ?.onJoined({
+        roomId: 'AB12CD',
+        playerId: 'A',
+        seat: 0,
+        isHost: true,
+        reconnectToken: 'rt-4',
+      });
+    ctx.status()?.('playing');
+    ctx.net.push(netState('A'));
+    expect(loadResume()).not.toBeNull();
+    ctx.status()?.('mismatch'); // версия протокола разошлась → реклеймить некуда, секрет стираем
+    expect(loadResume()).toBeNull();
+  });
+
+  it('goOnline пробрасывает resumeToken в фабрику сессии (resume-on-reload, 2.4.c-3-3)', () => {
+    let seen: string | null | undefined = 'UNSET';
+    const make = (
+      _i: OnlineIntent,
+      _cb: OnlineCallbacks,
+      resumeToken?: string | null,
+    ): OnlineSession => {
+      seen = resumeToken;
+      return {
+        transport: new FakeNetTransport(),
+        dispose: vi.fn(),
+        start: vi.fn(),
+        kick: vi.fn(),
+        setReady: vi.fn(),
+        playAgain: vi.fn(),
+      };
+    };
+    const store = createGameStore(new LocalTransport(new MemoryGameStorage(), () => 1), make);
+    store.getState().goOnline({ type: 'join', code: 'AB12CD' }, 'secret-tok');
+    expect(seen).toBe('secret-tok');
   });
 
   it('local-режим: ввод никогда не заблокирован, баннера нет (без регрессий Вехи 1)', () => {

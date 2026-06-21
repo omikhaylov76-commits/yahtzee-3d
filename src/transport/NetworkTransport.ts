@@ -68,7 +68,11 @@ export class NetworkTransport implements Transport {
     private readonly socket: TransportSocket,
     private readonly intent: OnlineIntent,
     private readonly makeActionId: () => string = () => crypto.randomUUID(),
+    // resume-on-reload (2.4.c-3-3): засеянный из sessionStorage токен реклейма → enter() на первом же
+    // connect пойдёт по ветке reclaim (а не fresh create/join), вернув нас в ИДУЩУЮ партию.
+    initialReconnectToken: string | null = null,
   ) {
+    this.reconnectToken = initialReconnectToken;
     this.code =
       intent.type === 'join' ? intent.code : intent.type === 'joinOpen' ? intent.tableId : null;
     socket.on(MSG.state, (p) => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from './state/gameStore';
+import { loadResume, resumeToIntent } from './platform/resumeSession';
 import { useUiStore } from './state/uiStore';
 import { useAuthStore } from './state/authStore';
 import { eventToSound, soundEngine } from './sound';
@@ -57,6 +58,16 @@ export function App() {
   useEffect(() => {
     void fetchMe();
   }, [fetchMe]);
+
+  // resume-on-reload (2.4.c-3-3): если в sessionStorage остался активный сетевой стол (F5 во время
+  // партии) — сразу реклеймим место по токену. Комната исчезла/завершена → сервер пришлёт room:gone,
+  // и мы увидим терминал «This game has ended.». В ЛОББИ место не держится → туда не резюмим (syncResume
+  // пишет резюм только при идущей партии). goOnline сам игнорирует повторный вызов (StrictMode-safe).
+  const goOnline = useGameStore((s) => s.goOnline);
+  useEffect(() => {
+    const info = loadResume();
+    if (info) goOnline(resumeToIntent(info), info.token);
+  }, [goOnline]);
 
   // Состояние «загрузка»: лоадер до первого кадра (в F5+ — реальная загрузка ассетов).
   const [ready, setReady] = useState(false);

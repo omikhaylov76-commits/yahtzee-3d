@@ -16,6 +16,7 @@ import {
   type OnlineStatus,
 } from '../platform/net';
 import type { OnlineIntent } from '../transport/NetworkTransport';
+import { saveResume, clearResume, type ResumeInfo } from '../platform/resumeSession';
 import type { LobbyPayload } from '../../shared/protocol';
 import { uiStore } from './uiStore';
 
@@ -84,8 +85,12 @@ export interface GameStoreState {
    * онлайна/до первого presence. Если в списке нет НИКОГО, кроме `myPlayerId` → соперник вышел (баннер).
    */
   connectedIds: string[] | null;
-  /** Войти в онлайн по намерению (создать комнату / войти по коду): подменить транспорт сетевым. */
-  goOnline: (intent: OnlineIntent) => void;
+  /**
+   * Войти в онлайн по намерению (создать комнату / войти по коду): подменить транспорт сетевым.
+   * `resumeToken` (2.4.c-3-3) — секрет реклейма из sessionStorage для resume-on-reload: при его наличии
+   * транспорт сразу реклеймит место в идущей партии вместо fresh-join.
+   */
+  goOnline: (intent: OnlineIntent, resumeToken?: string | null) => void;
   /** Хозяин запускает партию из лобби (сервер проверяет роль и ≥2 игроков). */
   startGameOnline: () => void;
   /** Хозяин выгоняет игрока из лобби по индексу места (2.2.c-1); сервер проверяет роль. */
@@ -156,6 +161,7 @@ export function createGameStore(
   makeOnlineSession: (
     intent: OnlineIntent,
     cb: OnlineCallbacks,
+    resumeToken?: string | null,
   ) => OnlineSession = createOnlineSession,
 ): StoreApi<GameStoreState> {
   const sound = loadSound();
@@ -165,6 +171,8 @@ export function createGameStore(
   // не теряется при заходе в онлайн); сетевой транспорт создаётся на сессию.
   let active: Transport = localTransport;
   let session: OnlineSession | null = null;
+  // resume-on-reload (2.4.c-3-3): что положить в sessionStorage, пока идёт партия (пишет syncResume).
+  let resumeInfo: ResumeInfo | null = null;
   let unsub: () => void = () => {};
 
   const store = createStore<GameStoreState>((set, get) => ({
@@ -222,42 +230,69 @@ export function createGameStore(
     readyUp: false,
     roomCode: null,
     connectedIds: null,
-    goOnline: (intent) => {
+    goOnline: (intent, resumeToken = null) => {
       if (get().mode === 'online') return; // уже онлайн — повторный заход игнорируем
-      session = makeOnlineSession(intent, {
-        onStatus: (onlineStatus) =>
-          // 'kicked' терминален и приходит, пока мы в лобби: гасим `lobby`, чтобы роутер увёл из
-          // LobbyScreen на OnlineScreen со статусом (там покажется «хозяин удалил вас»). (2.2.c-1)
-          // 'gone' (2.4.c-1) приходит ПОСЛЕ старта (реконнект в исчезнувшую/завершённую комнату): гасим и
-          // лобби, и состояние игры (state=null) — роутер уведёт из GameScreen на экран входа с «партия завершена».
-          store.setState(
-            onlineStatus === 'gone'
-              ? { onlineStatus, lobby: null, state: null, connectedIds: null }
-              : onlineStatus === 'kicked'
-                ? { onlineStatus, lobby: null }
-                : { onlineStatus },
-          ),
-        onLobby: (lobby) => store.setState({ lobby }),
-        onPresence: (connected) => store.setState({ connectedIds: connected }), // 2.2.d-2: «остался один»
-        // Стол вернулся в лобби после партии (ADR-0016, реванш): из игры обратно в ожидание; чистим
-        // присутствие (иначе ложный «opponent left» мигнёт в следующей партии). Состояние игры гасит
-        // транспорт (emit null) → подписка выставит state=null; роутер покажет лобби (2.5.a-2).
-        onReset: () => store.setState({ onlineStatus: 'waiting', connectedIds: null }),
-        onJoined: (j) =>
-          store.setState({
-            myPlayerId: j.playerId,
-            mySeat: j.seat,
-            isHost: j.isHost,
-            roomCode: j.roomId,
-          }),
-        // Залогинен без ника (2.3.e-3b safety net): гасим мёртвую онлайн-сессию и ведём на онбординг
-        // (вернёмся в online). Проактивный гейт в OnlineScreen обычно не доводит сюда — это страховка.
-        onNicknameRequired: () => {
-          get().goLocal();
-          uiStore.getState().setNicknameReturn('online');
-          uiStore.getState().setView('nickname');
+      resumeInfo = null; // заполнится на `joined`; в sessionStorage положит syncResume (2.4.c-3-3)
+      session = makeOnlineSession(
+        intent,
+        {
+          onStatus: (onlineStatus) => {
+            // 'gone'/'kicked'/'mismatch' терминальны — комната недостижима: чистим резюм, чтобы следующая
+            // перезагрузка вела в меню, а не в мёртвую комнату (resume-on-reload, 2.4.c-3-3).
+            if (
+              onlineStatus === 'gone' ||
+              onlineStatus === 'kicked' ||
+              onlineStatus === 'mismatch'
+            ) {
+              resumeInfo = null;
+              clearResume();
+            }
+            // 'kicked' терминален и приходит, пока мы в лобби: гасим `lobby`, чтобы роутер увёл из
+            // LobbyScreen на OnlineScreen со статусом (там покажется «хозяин удалил вас»). (2.2.c-1)
+            // 'gone' (2.4.c-1) приходит ПОСЛЕ старта (реконнект в исчезнувшую/завершённую комнату): гасим и
+            // лобби, и состояние игры (state=null) — роутер уведёт из GameScreen на экран входа с «партия завершена».
+            store.setState(
+              onlineStatus === 'gone'
+                ? { onlineStatus, lobby: null, state: null, connectedIds: null }
+                : onlineStatus === 'kicked'
+                  ? { onlineStatus, lobby: null }
+                  : { onlineStatus },
+            );
+          },
+          onLobby: (lobby) => store.setState({ lobby }),
+          onPresence: (connected) => store.setState({ connectedIds: connected }), // 2.2.d-2: «остался один»
+          // Стол вернулся в лобби после партии (ADR-0016, реванш): из игры обратно в ожидание; чистим
+          // присутствие (иначе ложный «opponent left» мигнёт в следующей партии). Состояние игры гасит
+          // транспорт (emit null) → подписка выставит state=null; роутер покажет лобби (2.5.a-2).
+          onReset: () => store.setState({ onlineStatus: 'waiting', connectedIds: null }),
+          onJoined: (j) => {
+            store.setState({
+              myPlayerId: j.playerId,
+              mySeat: j.seat,
+              isHost: j.isHost,
+              roomCode: j.roomId,
+            });
+            // resume-on-reload (2.4.c-3-3): как вернуться в эту комнату по токену; в sessionStorage положит
+            // syncResume, когда партия станет активной (state.phase==='playing'). open → joinOpen, иначе join.
+            const open =
+              intent.type === 'joinOpen' || (intent.type === 'create' && intent.open === true);
+            resumeInfo = {
+              type: open ? 'joinOpen' : 'join',
+              roomId: j.roomId,
+              token: j.reconnectToken,
+              ...(intent.name ? { name: intent.name } : {}),
+            };
+          },
+          // Залогинен без ника (2.3.e-3b safety net): гасим мёртвую онлайн-сессию и ведём на онбординг
+          // (вернёмся в online). Проактивный гейт в OnlineScreen обычно не доводит сюда — это страховка.
+          onNicknameRequired: () => {
+            get().goLocal();
+            uiStore.getState().setNicknameReturn('online');
+            uiStore.getState().setView('nickname');
+          },
         },
-      });
+        resumeToken,
+      );
       switchTo(session.transport);
       set({
         mode: 'online',
@@ -287,6 +322,8 @@ export function createGameStore(
       if (get().mode === 'local') return;
       session?.dispose(); // отключить сокет + обнулить сетевой транспорт (2.1.c reset)
       session = null;
+      resumeInfo = null;
+      clearResume(); // вышли из онлайна — резюм не нужен (resume-on-reload, 2.4.c-3-3)
       // Возврат на локальный транспорт. ИНВАРИАНТ (важно для «выхода в меню», 2.1.d-2): онлайн
       // достижим ТОЛЬКО из меню, а меню роутер показывает лишь при `state===null` (App.tsx:
       // `state ? Game : view`). Значит пока мы онлайн, `localTransport` гарантированно пуст —
@@ -316,6 +353,15 @@ export function createGameStore(
     }
   }
 
+  // resume-on-reload (2.4.c-3-3): пока идёт СЕТЕВАЯ партия — держим секрет реклейма в sessionStorage,
+  // чтобы F5/перезагрузка вернулась в неё (а не fresh-join). Чистим, когда партия закончилась/сброшена в
+  // лобби/мы вышли — тогда перезагрузка ведёт в меню (лобби место не держит — принятый минор, c-1).
+  function syncResume(state: GameState | null): void {
+    const online = store.getState().mode === 'online';
+    if (online && resumeInfo && state && state.phase === 'playing') saveResume(resumeInfo);
+    else if (online && (state === null || state.phase === 'over')) clearResume();
+  }
+
   // Зеркалим обновления АКТИВНОГО транспорта в стор; при свапе переподписываемся и сразу
   // показываем текущее состояние нового транспорта (события сбрасываем — это не игровое действие).
   function switchTo(next: Transport): void {
@@ -324,6 +370,7 @@ export function createGameStore(
     unsub = active.subscribe((state, events) => {
       store.setState({ state, events });
       mirrorNet(); // приход авторитетного состояния/denied снимает pending, обновляет playerId
+      syncResume(state); // держим/чистим секрет реклейма по фазе партии (2.4.c-3-3)
     });
     store.setState({ state: active.getState(), events: [] });
     mirrorNet();
@@ -331,6 +378,7 @@ export function createGameStore(
   unsub = active.subscribe((state, events) => {
     store.setState({ state, events });
     mirrorNet();
+    syncResume(state); // 2.4.c-3-3
   });
 
   return store;
