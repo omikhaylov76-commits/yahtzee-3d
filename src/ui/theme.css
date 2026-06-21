@@ -1980,11 +1980,11 @@ body {
   font-size: 16px;
   color: var(--heading);
 }
-/* Корона чемпиона — маленький значок в палитре Auros (сиреневый, дозированно). */
+/* Корона чемпиона — тёплое золото (контраст к teal-палитре, классика «1-го места»). */
 .lb__crown {
   flex: none;
-  color: var(--lilac);
-  filter: drop-shadow(0 0 6px rgba(253, 233, 255, 0.55));
+  color: #f5cb5c;
+  filter: drop-shadow(0 0 6px rgba(245, 203, 92, 0.6));
 }
 .lb__meta {
   font-size: 11px;
