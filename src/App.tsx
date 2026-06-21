@@ -10,6 +10,7 @@ import { MenuScreen } from './ui/screens/MenuScreen';
 import { NicknameScreen } from './ui/screens/NicknameScreen';
 import { CabinetScreen } from './ui/screens/CabinetScreen';
 import { OnlineScreen } from './ui/screens/OnlineScreen';
+import { TablesScreen } from './ui/screens/TablesScreen';
 import { LobbyScreen } from './ui/screens/LobbyScreen';
 import { StartScreen } from './ui/screens/StartScreen';
 import { GameScreen } from './ui/screens/GameScreen';
@@ -73,6 +74,10 @@ export function App() {
     )
   ) : mode === 'online' && lobby ? (
     <LobbyScreen />
+  ) : mode === 'online' ? (
+    <OnlineScreen />
+  ) : view === 'tables' ? (
+    <TablesScreen />
   ) : view === 'nickname' ? (
     <NicknameScreen />
   ) : view === 'profile' ? (

@@ -122,6 +122,28 @@ describe('NetworkTransport — вход и состояние', () => {
 
     expect(got).toHaveLength(1);
   });
+
+  it('joinOpen-intent шлёт room:joinOpen по tableId; реконнект reclaim-ит с playerId (2.5.d)', () => {
+    const s = new FakeSocket();
+    const t = new NetworkTransport(
+      s,
+      { type: 'joinOpen', tableId: 'house-1', name: 'Mike' },
+      seqIds(),
+    );
+    s.server('connect', undefined); // первый вход — joinOpen по tableId (без playerId)
+    expect(s.sent[0]).toEqual({
+      event: MSG.joinOpen,
+      payload: { tableId: 'house-1', name: 'Mike' },
+    });
+
+    s.server(MSG.joined, { roomId: 'house-1', playerId: 'seat-h', seat: 1, isHost: false });
+    s.server('connect', undefined); // реконнект → joinOpen с playerId (reclaim идущей партии)
+    expect(s.sent.filter((m) => m.event === MSG.joinOpen).map((m) => m.payload)).toEqual([
+      { tableId: 'house-1', name: 'Mike' },
+      { tableId: 'house-1', playerId: 'seat-h', name: 'Mike' },
+    ]);
+    expect(t.getPlayerId()).toBe('seat-h');
+  });
 });
 
 describe('NetworkTransport — pending-гейт и маппинг', () => {

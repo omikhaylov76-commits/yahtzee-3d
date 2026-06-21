@@ -195,6 +195,13 @@ export function OnlineScreen() {
           <p className="coming__sub">Start a table and share the code, or join a friend by code.</p>
         </header>
 
+        <button type="button" className="tables-entry" onClick={() => setView('tables')}>
+          <span className="online-card__title">Browse open tables</span>
+          <span className="online-card__desc">
+            See who&rsquo;s playing now — join without a code.
+          </span>
+        </button>
+
         <div className="online-field">
           <label className="field-label" htmlFor="online-name">
             Your name <span className="field-opt">optional</span>

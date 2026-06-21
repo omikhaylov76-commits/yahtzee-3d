@@ -1776,3 +1776,89 @@ body {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ───────── Список открытых столов (2.5.d-2, ADR-0017) ───────── */
+.tables-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.table-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  text-align: left;
+  padding: var(--s-4);
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  color: var(--heading);
+  font-family: var(--font-display);
+  cursor: pointer;
+  transition:
+    transform 0.1s ease,
+    border-color 0.12s ease;
+}
+.table-row:not(.is-disabled):hover {
+  border-color: rgba(237, 255, 254, 0.4);
+}
+.table-row:not(.is-disabled):active {
+  transform: translateY(1px) scale(0.995);
+}
+.table-row.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.table-row__name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table-row__seats {
+  flex: none;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+/* «In game» / «Full» — нейтральный серый статус (не teal, как Waiting). */
+.conn-status--ingame {
+  color: var(--text-dim);
+}
+.conn-status--ingame::before {
+  background: var(--text-dim);
+}
+/* Сообщения списка (загрузка / ошибка / пусто) — по центру, сдержанно. */
+.tables__msg {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+/* Вход в список со страницы онлайна — карточка-кнопка (тон-поверхность, как online-card). */
+.tables-entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  width: 100%;
+  text-align: left;
+  padding: var(--s-5);
+  border-radius: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--hairline);
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+.tables-entry:hover {
+  border-color: rgba(237, 255, 254, 0.4);
+}

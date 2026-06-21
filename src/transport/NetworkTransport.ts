@@ -33,7 +33,8 @@ export interface TransportSocket {
  */
 export type OnlineIntent =
   | { type: 'create'; name?: string }
-  | { type: 'join'; code: string; name?: string };
+  | { type: 'join'; code: string; name?: string }
+  | { type: 'joinOpen'; tableId: string; name?: string }; // вход в открытый/дежурный стол по id (2.5.d)
 
 /** `Action` ядра -> сетевое действие. `ROLL` без значений (их даёт сервер из CSPRNG, ADR-0012). */
 function toNetworkAction(action: Action): NetworkAction | null {
@@ -66,7 +67,8 @@ export class NetworkTransport implements Transport {
     private readonly intent: OnlineIntent,
     private readonly makeActionId: () => string = () => crypto.randomUUID(),
   ) {
-    this.code = intent.type === 'join' ? intent.code : null;
+    this.code =
+      intent.type === 'join' ? intent.code : intent.type === 'joinOpen' ? intent.tableId : null;
     socket.on(MSG.state, (p) => {
       // Оболочку проверяем (2.3.c-4); глубину публичного состояния доверяем своему серверу.
       if (stateSchema.safeParse(p).success) this.onState(p as StatePayload);
@@ -100,23 +102,41 @@ export class NetworkTransport implements Transport {
   private enter(): void {
     if (this.disposed) return; // после reset сессию не воскрешаем
     this.pendingActionId = null;
+    const intent = this.intent;
+    // Реклейм на (ре)коннект: playerId+id уже есть → возврат. Для joinOpen — через joinOpen (открытый/
+    // дежурный стол), иначе через join (приватный код). Имя пробрасываем (в ЛОББИ место не держится,
+    // fresh-join сбросил бы его на «Player N»). Сброс pending — авторитетный re-snapshot разрулит.
     if (this.playerId && this.code) {
-      // Реклейм: идущую партию сервер вернёт по playerId (имя там уже сохранено). Но реконнект в ЛОББИ
-      // место не держит (fresh-join) — поэтому имя пробрасываем тоже, иначе оно сбросится на «Player N».
-      const { name } = this.intent;
-      this.socket.emit(
-        MSG.join,
-        name
-          ? { roomId: this.code, playerId: this.playerId, name }
-          : { roomId: this.code, playerId: this.playerId },
-      );
+      if (intent.type === 'joinOpen') {
+        this.socket.emit(
+          MSG.joinOpen,
+          intent.name
+            ? { tableId: this.code, playerId: this.playerId, name: intent.name }
+            : { tableId: this.code, playerId: this.playerId },
+        );
+      } else {
+        this.socket.emit(
+          MSG.join,
+          intent.name
+            ? { roomId: this.code, playerId: this.playerId, name: intent.name }
+            : { roomId: this.code, playerId: this.playerId },
+        );
+      }
       return;
     }
-    if (this.intent.type === 'create') {
-      this.socket.emit(MSG.create, this.intent.name ? { name: this.intent.name } : {});
+    // Первый вход по намерению.
+    if (intent.type === 'create') {
+      this.socket.emit(MSG.create, intent.name ? { name: intent.name } : {});
+    } else if (intent.type === 'joinOpen') {
+      this.socket.emit(
+        MSG.joinOpen,
+        intent.name ? { tableId: intent.tableId, name: intent.name } : { tableId: intent.tableId },
+      );
     } else {
-      const { code, name } = this.intent;
-      this.socket.emit(MSG.join, name ? { roomId: code, name } : { roomId: code });
+      this.socket.emit(
+        MSG.join,
+        intent.name ? { roomId: intent.code, name: intent.name } : { roomId: intent.code },
+      );
     }
   }
 
