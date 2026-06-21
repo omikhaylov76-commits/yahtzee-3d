@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { useUiStore } from '../../state/uiStore';
 import { useGameStore } from '../../state/gameStore';
 import { roomInviteUrl } from '../../platform/deepLink';
+import { useFocusOnMount } from '../useFocusOnMount';
 
 /**
  * Лобби онлайн-комнаты (2.2.a-2 → полировка a-3, Auros). Герой — код комнаты (им делятся): крупный
@@ -23,6 +24,7 @@ export function LobbyScreen() {
   const setReady = useGameStore((s) => s.setReady);
   const goLocal = useGameStore((s) => s.goLocal);
   const setView = useUiStore((s) => s.setView);
+  const focusRef = useFocusOnMount<HTMLDivElement>(); // a11y (2.4.d): фокус на лобби при маунте экрана
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);
   const [confirmKick, setConfirmKick] = useState<number | null>(null);
@@ -108,7 +110,7 @@ export function LobbyScreen() {
 
   return (
     <Screen className="lobby">
-      <div className="lobby__inner">
+      <div className="lobby__inner" ref={focusRef} tabIndex={-1} aria-label="Game lobby">
         <button type="button" className="back-link" onClick={leave}>
           ← Leave room
         </button>
@@ -203,6 +205,11 @@ export function LobbyScreen() {
             Waiting for the host to start…
           </p>
         )}
+
+        {/* Нота про живой сервер (2.4.d, ADR-0009): рестарт/деплой может прервать партию. */}
+        <p className="lobby__note">
+          Games run on a live server — a restart or update may end a game in progress.
+        </p>
       </div>
     </Screen>
   );

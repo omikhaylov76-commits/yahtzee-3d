@@ -6,6 +6,7 @@ import { useGameStore } from '../../state/gameStore';
 import { useAuthStore } from '../../state/authStore';
 import { useOpenTables } from '../../state/openTables';
 import type { OpenTable } from '../../../shared/protocol';
+import { useFocusOnMount } from '../useFocusOnMount';
 
 /**
  * Экран публичного списка открытых/дежурных столов (2.5.d-2, ADR-0017): опрашивает `GET /tables`,
@@ -24,6 +25,7 @@ export function TablesScreen() {
   const user = useAuthStore((s) => s.user);
   const goOnline = useGameStore((s) => s.goOnline);
   const { tables, status, refresh } = useOpenTables();
+  const headingRef = useFocusOnMount<HTMLHeadingElement>(); // a11y (2.4.d): фокус на заголовок при маунте
 
   const join = (t: OpenTable) => {
     if (t.status !== 'waiting') return; // полный / идёт партия — вход закрыт (зрителей нет)
@@ -45,7 +47,9 @@ export function TablesScreen() {
 
         <header className="coming__head online-entry__head">
           <Eyebrow>Online · tables</Eyebrow>
-          <h1 className="display coming__title">Open tables</h1>
+          <h1 className="display coming__title" ref={headingRef} tabIndex={-1}>
+            Open tables
+          </h1>
           <p className="coming__sub">Jump into any table with a free seat.</p>
         </header>
 

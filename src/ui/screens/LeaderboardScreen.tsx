@@ -3,6 +3,7 @@ import { Eyebrow } from '../components/Eyebrow';
 import { Button } from '../components/Button';
 import { useUiStore } from '../../state/uiStore';
 import { useLeaderboard } from '../../state/leaderboard';
+import { useFocusOnMount } from '../useFocusOnMount';
 
 /** Металлы подиума для короны (отлив): светлый → металл → тёмный = диагональный блик. */
 const CROWN_METALS: Record<1 | 2 | 3, [string, string, string]> = {
@@ -37,6 +38,7 @@ function CrownIcon({ rank }: { rank: 1 | 2 | 3 }) {
 export function LeaderboardScreen() {
   const setView = useUiStore((s) => s.setView);
   const { rows, status, refresh } = useLeaderboard();
+  const headingRef = useFocusOnMount<HTMLHeadingElement>(); // a11y (2.4.d): фокус на заголовок при маунте
 
   return (
     <Screen className="coming">
@@ -47,7 +49,9 @@ export function LeaderboardScreen() {
 
         <header className="coming__head online-entry__head">
           <Eyebrow>Online · leaderboard</Eyebrow>
-          <h1 className="display coming__title">Leaderboard</h1>
+          <h1 className="display coming__title" ref={headingRef} tabIndex={-1}>
+            Leaderboard
+          </h1>
           <p className="coming__sub">Top players by total points across rated online games.</p>
         </header>
 

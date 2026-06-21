@@ -8,6 +8,7 @@ import { useGameStore } from '../../state/gameStore';
 import type { OnlineStatus } from '../../platform/net';
 import { normalizeName, MAX_NAME_LEN } from '../../../shared/names';
 import { roomCodeFromUrl } from '../../platform/deepLink';
+import { useFocusOnMount } from '../useFocusOnMount';
 
 /**
  * Экран входа в онлайн (2.2.a-2 → полировка a-3): создать комнату (код выдаст сервер) или войти по
@@ -39,6 +40,7 @@ export function OnlineScreen() {
   const goLocal = useGameStore((s) => s.goLocal);
   const mode = useGameStore((s) => s.mode);
   const status = useGameStore((s) => s.onlineStatus) ?? 'connecting';
+  const headingRef = useFocusOnMount<HTMLHeadingElement>(); // a11y (2.4.d): фокус на заголовок при маунте
   const [name, setName] = useState('');
   // Пришли по ссылке-приглашению `?room=CODE`? Захватываем код ОДИН раз (URL не меняется за жизнь экрана):
   // по нему показываем УЗКИЙ экран join (2.2.d-1) вместо полной формы create/join. Поле кода — из него же.
@@ -97,7 +99,9 @@ export function OnlineScreen() {
         <div className="coming__inner">
           <header className="coming__head">
             <Eyebrow>Online</Eyebrow>
-            <h1 className="display coming__title">Play online</h1>
+            <h1 className="display coming__title" ref={headingRef} tabIndex={-1}>
+              Play online
+            </h1>
           </header>
           <p className={`conn-status conn-status--${status}`} role="status" aria-live="polite">
             {STATUS_LABEL[status]}
@@ -130,7 +134,9 @@ export function OnlineScreen() {
 
           <header className="coming__head online-entry__head">
             <Eyebrow>Online · invite</Eyebrow>
-            <h1 className="display coming__title">Join the room</h1>
+            <h1 className="display coming__title" ref={headingRef} tabIndex={-1}>
+              Join the room
+            </h1>
             <p className="coming__sub">You&rsquo;ve been invited. Add your name and jump in.</p>
           </header>
 
@@ -200,7 +206,9 @@ export function OnlineScreen() {
 
         <header className="coming__head online-entry__head">
           <Eyebrow>Online</Eyebrow>
-          <h1 className="display coming__title">Play online</h1>
+          <h1 className="display coming__title" ref={headingRef} tabIndex={-1}>
+            Play online
+          </h1>
           <p className="coming__sub">Start a table and share the code, or join a friend by code.</p>
         </header>
 

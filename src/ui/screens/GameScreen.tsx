@@ -200,7 +200,7 @@ export function GameScreen() {
             </div>
             {/* Сетевой баннер (2.1.d-3): «ход соперника» / «соединение потеряно». В local — null. */}
             {banner && (
-              <p className="turn__banner" role="status">
+              <p className="turn__banner" role="status" aria-live="polite">
                 {banner}
               </p>
             )}
@@ -256,7 +256,12 @@ export function GameScreen() {
             </p>
           </div>
 
-          <p className={`denied${denied ? ' is-shown' : ''}`} role="status" key={denied?.key}>
+          <p
+            className={`denied${denied ? ' is-shown' : ''}`}
+            role="status"
+            aria-live="polite"
+            key={denied?.key}
+          >
             {denied?.msg ?? ''}
           </p>
         </section>
