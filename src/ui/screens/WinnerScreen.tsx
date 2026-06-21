@@ -13,6 +13,8 @@ export function WinnerScreen() {
   const mode = useGameStore((s) => s.mode);
   const newGame = useGameStore((s) => s.newGame);
   const reset = useGameStore((s) => s.reset);
+  const readyUp = useGameStore((s) => s.readyUp);
+  const playAgainOnline = useGameStore((s) => s.playAgain);
   const setView = useUiStore((s) => s.setView);
   // Хуки — ДО раннего return (правила хуков). Значения считаем с защитой от null-состояния.
   const [rec, setRec] = useState<SoloRecordResult | null>(null);
@@ -76,12 +78,22 @@ export function WinnerScreen() {
             не сработает (партию создаёт сервер), поэтому ведём в меню. Реванш той же комнатой — 2.4.b. */}
         <div className="winner__actions">
           {mode === 'online' ? (
-            <>
+            readyUp ? (
+              // Открытый/дежурный стол (2.5.d-3b): реванш тем же составом — сервер вернёт всех в лобби.
+              <>
+                <Button variant="primary" onClick={playAgainOnline}>
+                  Play again
+                </Button>
+                <Button variant="ghost" onClick={toMenu}>
+                  Leave
+                </Button>
+              </>
+            ) : (
+              // Приватная сетевая партия: сетевого реванша нет — выход в меню (новый стол по желанию).
               <Button variant="primary" onClick={toMenu}>
                 Back to menu
               </Button>
-              <p className="winner__rematch">Rematch with the same room — coming soon.</p>
-            </>
+            )
           ) : (
             <>
               <Button variant="primary" onClick={playAgain}>

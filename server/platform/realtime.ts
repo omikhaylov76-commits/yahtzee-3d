@@ -480,7 +480,25 @@ export function attachRealtime(
       if (!me) return;
       me.ready = parsed.data.ready;
       broadcastLobby(room);
-      if (allReadyToStart(room)) startRoom(room, 'ready'); // предохранитель залипших — c
+      if (allReadyToStart(room)) startRoom(room, 'ready'); // предохранитель залипших — e
+    });
+
+    // «Play again» в открытом/дежурном столе (ADR-0016, 2.5.d-3b): после game:over игрок жмёт реванш →
+    // стол сбрасывается в лобби и инициатор сразу готов; остальные вернутся по room:reset и тоже готовятся.
+    // Только open/persistent (приватные — без сетевого реванша, создают новый стол). recordMatch уже был.
+    socket.on(MSG.playAgain, () => {
+      const ctx = sockets.get(socket.id);
+      if (!ctx) return;
+      const room = rooms.get(ctx.roomId);
+      if (!room || room.visibility === 'private') return;
+      if (!room.game || !module.isGameOver(room.game.state)) return; // только после завершённой партии
+      resetRoomToLobby(room); // обнулить партию, снять готовность, убрать ушедших, гарантировать хозяина
+      io.to(room.id).emit(MSG.reset, { roomId: room.id } satisfies ResetPayload);
+      const me = room.seats.find((s) => s.playerId === ctx.playerId);
+      if (me) me.ready = true; // инициатор реванша сразу готов
+      broadcastLobby(room);
+      log.info({ roomId: room.id, playerId: ctx.playerId }, 'play again — table reset to lobby');
+      if (allReadyToStart(room)) startRoom(room, 'ready'); // редкий случай: остался один и сразу кворум
     });
 
     socket.on(MSG.kick, (req: KickRequest) => {
@@ -573,20 +591,9 @@ export function attachRealtime(
         }
       }
 
-      // ADR-0016: open/persistent стол ПЕРЕЖИВАЕТ партию — после game:over сбрасываем его в лобби
-      // (реванш). СТРОГО после сборки rows выше (resetRoomToLobby меняет room.seats — иначе
-      // залогиненные записались бы как гости). Приватные комнаты не трогаем (одноразовая партия по
-      // коду, 2.2). Клиентский возврат с экрана победителя в лобби по `room:reset` — 2.5.a-2.
-      if (
-        room.game &&
-        room.visibility !== 'private' &&
-        result.events.some((e) => e.type === 'game:over')
-      ) {
-        resetRoomToLobby(room);
-        io.to(room.id).emit(MSG.reset, { roomId: room.id } satisfies ResetPayload);
-        broadcastLobby(room);
-        log.info({ roomId: room.id }, 'table reset to lobby after game (open/persistent)');
-      }
+      // ADR-0016: open/persistent стол ПЕРЕЖИВАЕТ партию, но сброс в лобби — НЕ авто на game:over
+      // (иначе экран победителя мелькает), а по «Play again» игрока (MSG.playAgain, 2.5.d-3b): сперва
+      // игроки видят итоги, затем кто-то жмёт реванш. recordMatch выше уже записал итог на game:over.
     });
 
     socket.on('disconnect', () => {

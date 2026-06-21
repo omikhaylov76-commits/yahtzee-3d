@@ -29,6 +29,7 @@ export const MSG = {
   joinOpen: 'room:joinOpen', // вход в открытый/дежурный стол по публичному id из списка (ADR-0017)
   start: 'room:start',
   ready: 'room:ready', // тоггл готовности места (ADR-0016, ready-up в open/persistent)
+  playAgain: 'room:playAgain', // реванш: сброс открытого/дежурного стола в лобби после партии (2.5.d-3b)
   kick: 'room:kick', // хозяин выгоняет игрока из лобби (2.2.c-1)
   action: 'action',
   // сервер -> клиент

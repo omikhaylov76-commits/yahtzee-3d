@@ -92,6 +92,8 @@ export interface GameStoreState {
   kickPlayer: (seat: number) => void;
   /** Тоггл своей готовности (2.5.b, ready-up в open/persistent). Сервер стартует, когда все готовы. */
   setReady: (ready: boolean) => void;
+  /** Реванш в открытом/дежурном столе после партии (2.5.d-3b): сброс стола в лобби + я сразу готов. */
+  playAgain: () => void;
   /** Выйти из онлайна: отключить сетевой транспорт, вернуться на сохранённый локальный. */
   goLocal: () => void;
 }
@@ -271,6 +273,9 @@ export function createGameStore(
     },
     setReady: (ready) => {
       session?.setReady(ready);
+    },
+    playAgain: () => {
+      session?.playAgain();
     },
     goLocal: () => {
       if (get().mode === 'local') return;
