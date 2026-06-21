@@ -1884,9 +1884,18 @@ body {
 .menu__leaderboard {
   align-self: center;
 }
-/* Шире узкой онлайн-колонки — рейтингу нужно место (и так уходит горизонтальный скролл). */
+/* Шире узкой онлайн-колонки + компактная вертикаль: всё влезает без скролла страницы,
+   а margin:auto центрирует блок → воздух и сверху, и снизу под плашкой. */
 .online-entry.leaderboard {
   width: min(680px, 100%);
+  padding: var(--s-6) var(--s-6) var(--s-8);
+  gap: var(--s-3);
+}
+.leaderboard .coming__head {
+  gap: var(--s-2);
+}
+.leaderboard .coming__title {
+  font-size: clamp(28px, 4.5vw, 40px);
 }
 /* Рейтинг — ОДНА плашка-афиша: выделяется только панель; строки внутри плоские (без рамок/фона). */
 .lb-board {
@@ -1910,7 +1919,7 @@ body {
   display: flex;
   align-items: center;
   gap: var(--s-4);
-  padding: var(--s-3) 0;
+  padding: var(--s-2) 0;
   border-bottom: 1px solid var(--hairline-row);
 }
 .lb__row:last-child {
@@ -1937,8 +1946,8 @@ body {
 }
 .lb__avatar {
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   object-fit: cover;
   display: grid;
@@ -2010,7 +2019,7 @@ body {
 @media (max-width: 460px) {
   .lb__row {
     gap: var(--s-3);
-    padding: var(--s-3) var(--s-4);
+    padding: var(--s-2) 0;
   }
   .lb__avatar {
     width: 30px;
