@@ -2,7 +2,7 @@
  * Тесты сетевого транспорта (2.1.c): версия-гейт, in-flight `pending`, `denied`-обработка, маппинг
  * действий, `reset`. Сервер не нужен — подставляем фейковый сокет и гоняем входящие события вручную.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { NetworkTransport, type TransportSocket } from './NetworkTransport';
 import { MSG, type StatePayload } from '../../shared/protocol';
 import { createGame, toPublicState, type DomainEvent, type GameState } from '../core';
@@ -306,5 +306,90 @@ describe('NetworkTransport — denied и reset', () => {
     expect(got).toHaveLength(1);
     expect(got[0]).not.toBeNull();
     expect(t.getState()).not.toBeNull();
+  });
+});
+
+describe('NetworkTransport — watchdog на pending (2.6.2)', () => {
+  it('снимает залипший pending по таймауту, если ответ сервера пропал без реконнекта', () => {
+    vi.useFakeTimers();
+    try {
+      const s = new FakeSocket();
+      const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds(), null, 100);
+      s.server('connect', undefined);
+      const got: { state: GameState | null; events: DomainEvent[] }[] = [];
+      t.subscribe((state, events) => got.push({ state, events }));
+
+      t.dispatch({ type: 'ROLL' }); // pending встал; state НЕ приходит, сокет НЕ переподключается
+      expect(t.getPending()).toBe(true);
+
+      vi.advanceTimersByTime(100); // сработал сторож
+      expect(t.getPending()).toBe(false); // гейт снят
+      expect(got).toEqual([{ state: null, events: [] }]); // подписчик уведомлён → UI пересчитает блокировку
+
+      t.dispatch({ type: 'ROLL' }); // и следующее действие снова уходит
+      expect(s.sent.filter((m) => m.event === MSG.action)).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('приход state ДО таймаута гасит сторож (нет ложной разблокировки/лишнего emit)', () => {
+    vi.useFakeTimers();
+    try {
+      const s = new FakeSocket();
+      const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds(), null, 100);
+      const got: DomainEvent[][] = [];
+      t.subscribe((_state, events) => got.push(events));
+
+      t.dispatch({ type: 'ROLL' });
+      s.server(MSG.state, snapshot(1)); // авторитетный ответ пришёл вовремя → pending снят, сторож погашен
+      expect(t.getPending()).toBe(false);
+      expect(got).toHaveLength(1);
+
+      vi.advanceTimersByTime(500); // время прошло — сторож НЕ должен сработать повторно
+      expect(got).toHaveLength(1); // лишнего уведомления нет
+      expect(t.getPending()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('после reset() сторож не срабатывает (сессия мертва)', () => {
+    vi.useFakeTimers();
+    try {
+      const s = new FakeSocket();
+      const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds(), null, 100);
+      s.server('connect', undefined);
+      t.dispatch({ type: 'ROLL' });
+      const got: (GameState | null)[] = [];
+      t.subscribe((state) => got.push(state));
+
+      t.reset(); // → (null, []) и таймер сторожа погашен
+      vi.advanceTimersByTime(500);
+
+      expect(got).toEqual([null]); // только уведомление reset, сторож молчит
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('denied гасит сторож (нет позднего срабатывания после отказа)', () => {
+    vi.useFakeTimers();
+    try {
+      const s = new FakeSocket();
+      const t = new NetworkTransport(s, { type: 'join', code: 'dev' }, seqIds(), null, 100);
+      const got: DomainEvent[][] = [];
+      t.subscribe((_state, events) => got.push(events));
+
+      t.dispatch({ type: 'ROLL' }); // aid-1: pending + сторож заведён
+      s.server(MSG.denied, { reason: 'not-your-turn', actionId: 'aid-1' }); // отказ гасит pending И сторож
+      expect(t.getPending()).toBe(false);
+      expect(got).toEqual([[{ type: 'action:denied', reason: 'not-your-turn' }]]);
+
+      vi.advanceTimersByTime(500); // старый сторож НЕ должен стрельнуть после denied
+      expect(got).toHaveLength(1); // лишнего уведомления нет
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

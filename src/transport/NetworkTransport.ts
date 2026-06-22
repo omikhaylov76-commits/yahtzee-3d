@@ -50,11 +50,20 @@ function toNetworkAction(action: Action): NetworkAction | null {
   }
 }
 
+/**
+ * Сторож над `pending` (2.6.2): если авторитетный `state`/`denied` на наше действие не пришёл за это
+ * время И сокет НЕ переподключился (тогда `enter()` уже снял бы гейт) — снимаем застрявший `pending`,
+ * чтобы кнопки не блокировались навсегда. По умолчанию 15с; инъецируется в тестах.
+ */
+const DEFAULT_WATCHDOG_MS = 15_000;
+
 export class NetworkTransport implements Transport {
   private publicState: PublicGameState | null = null;
   private stateVersion = 0;
   /** `actionId` действия «в полёте» (ADR-0013): пока не null — новые действия игнорируются. */
   private pendingActionId: string | null = null;
+  /** Таймер-сторож над `pendingActionId` (2.6.2): снимает гейт, если ответ сервера пропал без реконнекта. */
+  private pendingTimer: ReturnType<typeof setTimeout> | null = null;
   private playerId: string | null = null;
   /** Секретный токен реконнекта места (2.4.c-1): получаем в `joined`, шлём при реклейме (не публичный playerId). */
   private reconnectToken: string | null = null;
@@ -71,6 +80,8 @@ export class NetworkTransport implements Transport {
     // resume-on-reload (2.4.c-3-3): засеянный из sessionStorage токен реклейма → enter() на первом же
     // connect пойдёт по ветке reclaim (а не fresh create/join), вернув нас в ИДУЩУЮ партию.
     initialReconnectToken: string | null = null,
+    // Сторож pending (2.6.2): таймаут авто-снятия зависшего гейта (см. DEFAULT_WATCHDOG_MS).
+    private readonly watchdogMs: number = DEFAULT_WATCHDOG_MS,
   ) {
     this.reconnectToken = initialReconnectToken;
     this.code =
@@ -108,7 +119,7 @@ export class NetworkTransport implements Transport {
    */
   private enter(): void {
     if (this.disposed) return; // после reset сессию не воскрешаем
-    this.pendingActionId = null;
+    this.clearPending();
     const intent = this.intent;
     // Реклейм на (ре)коннект: playerId+id уже есть → возврат. Для joinOpen — через joinOpen (открытый/
     // дежурный стол), иначе через join (приватный код). Имя пробрасываем (в ЛОББИ место не держится,
@@ -165,7 +176,7 @@ export class NetworkTransport implements Transport {
     const net = toNetworkAction(action);
     if (!net) return;
     const actionId = this.makeActionId();
-    this.pendingActionId = actionId;
+    this.armPending(actionId);
     this.socket.emit(MSG.action, { action: net, actionId });
   }
 
@@ -174,7 +185,7 @@ export class NetworkTransport implements Transport {
     this.socket.disconnect();
     this.publicState = null;
     this.stateVersion = 0;
-    this.pendingActionId = null;
+    this.clearPending();
     this.playerId = null;
     this.reconnectToken = null;
     this.emit(null, []);
@@ -197,12 +208,45 @@ export class NetworkTransport implements Transport {
     return this.pendingActionId !== null;
   }
 
+  /** Поставить in-flight гейт и завести сторож (2.6.2). */
+  private armPending(actionId: string): void {
+    this.pendingActionId = actionId;
+    if (this.pendingTimer !== null) clearTimeout(this.pendingTimer);
+    this.pendingTimer = setTimeout(() => this.onPendingTimeout(), this.watchdogMs);
+  }
+
+  /** Снять гейт и погасить сторож (нормальный путь: state/denied/реконнект/reset). */
+  private clearPending(): void {
+    if (this.pendingTimer !== null) {
+      clearTimeout(this.pendingTimer);
+      this.pendingTimer = null;
+    }
+    this.pendingActionId = null;
+  }
+
+  /**
+   * Сторож сработал (2.6.2): авторитетный `state`/`denied` на наше действие не пришёл за `watchdogMs`, и
+   * сокет НЕ переподключился (иначе `enter()` уже снял бы гейт). Снимаем pending — иначе кнопки залипнут
+   * навсегда (в 1-на-1 нового состояния без нашего хода не будет). Сервер сверит на следующем действии/
+   * состоянии (версии монотонны). Компромисс: редкий повторный ход (если пакет `state` потерян ПОСЛЕ
+   * применения на сервере) предпочтительнее вечного дедлока. Подписчикам — текущее состояние, чтобы UI
+   * пересчитал блокировку (`pending` снят).
+   */
+  private onPendingTimeout(): void {
+    this.pendingTimer = null;
+    if (this.disposed || this.pendingActionId === null) return;
+    this.pendingActionId = null;
+    // К моменту dispatch состояние партии уже закэшировано (иначе нечем ходить) → getState() здесь не
+    // null в реальном потоке; (null, []) достижимо лишь в вырожденном тест-сценарии без прихода state.
+    this.emit(this.getState(), []);
+  }
+
   private onState(payload: StatePayload): void {
     if (this.disposed) return; // поздний пакет после reset не должен воскресить партию (Major-1)
     if (payload.stateVersion <= this.stateVersion) return; // устаревшее/дубль — игнор (ADR-0013)
     this.publicState = payload.state;
     this.stateVersion = payload.stateVersion;
-    this.pendingActionId = null; // пришло авторитетное состояние — действие разрешилось
+    this.clearPending(); // пришло авторитетное состояние — действие разрешилось (+ гасим сторож)
     this.emit(this.getState(), payload.events);
   }
 
@@ -216,7 +260,7 @@ export class NetworkTransport implements Transport {
     if (this.disposed) return;
     this.publicState = null;
     this.stateVersion = 0;
-    this.pendingActionId = null;
+    this.clearPending();
     this.emit(null, []);
   }
 
@@ -227,7 +271,7 @@ export class NetworkTransport implements Transport {
     // Веха 1 уже играет на него «отказ» (звук не дублируем).
     if (!this.pendingActionId) return;
     if (payload.actionId != null && payload.actionId !== this.pendingActionId) return;
-    this.pendingActionId = null;
+    this.clearPending();
     this.emit(this.getState(), [{ type: 'action:denied', reason: payload.reason }]);
   }
 
