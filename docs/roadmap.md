@@ -58,7 +58,8 @@ _Порядок намеренный: сначала играбельная ло
 
 ## Веха 2 — Сетевая игра + кабинеты + лидерборд
 
-merged: —
+merged: — (одноветочно; КОД Вехи 2 готов. Аудит границы фазы пройден 2026-06-22: CRITICAL нет, 2 MAJOR
+закрыты в 2.6. На проде — v4; деплой v5 (2.4.c/d + 2.6) одним `railway up` — В ДОЛГУ.)
 
 > Архитектура спроектирована (ADR 0007–0014 + раздел «Сетевая игра» в architecture.md).
 > Стек: Node + Socket.IO + PostgreSQL на Railway. Авторитетный сервер переиспользует `core/`,
@@ -225,12 +226,19 @@ realtime + `NetworkTransport`), потом комнаты с кодами, по�
         Private/Open + «Browse open tables» (не ломая invite) + ready-UI лобби (бывш. b-2); **первый полный живой прогон**).
   - [x] 2.5.e (c5ba0c6) анти-абьюз (тонкий): предохранитель залипших (sweeper освобождает не-готовое место по таймауту) + под-лимит открытых на сокет. Лобби-hold/кик в открытых — backlog (хвосты 2.5 ниже).
 
+- [x] **2.6 Pre-deploy hardening (находки аудита границы Вехи 2)** — DONE (код, НЕ на проде). Аудит границы
+      фазы (2026-06-22): 5 независимых ревьюеров + зелёные (lint/265 тестов/типы/сборки) + живой прогон сервера
+      (v5; эндпоинты 200). **CRITICAL — нет**, закрыты 2 MAJOR: 2.6.1 (ea2d0fa) безопасный `unseed-leaderboard`
+      (удаляет только чисто-синтетические партии + `--dry-run`); 2.6.2 (6543eb3) watchdog на `pending` в
+      NetworkTransport (анти-залипание кнопок при потере `state` без разрыва сокета). Протокол НЕ менялся (v5).
+      Миноры аудита + dev-CORS `/auth` (A) — в backlog ниже. Детали — docs/progress/done/2.6-predeploy-hardening.md.
+
 ### Твои ручные действия на Railway (по блокам — чтобы подготовиться заранее)
 
 - ✅ **Прод на актуальном коде (2026-06-21, `railway up` 340baca): протокол v4** — задеплоены 2.5 (открытые/
   дежурные столы + ready-up + реванш) и 2.4.a (лидерборд). Лидерборд ЗАСЕЯН синтетикой (10 игроков, маркер
   `users.tier='seed'`; откат — `node --env-file=.env --import tsx server/scripts/unseed-leaderboard.ts`).
-  Деплой: `railway up --service yahtzee-3d`. **2.4.c/d ещё НЕ на проде** — выкатим следующим `railway up`.
+  Деплой: `railway up --service yahtzee-3d`. **2.4.c/d + 2.6 ещё НЕ на проде** (прод v4 → станет v5) — выкатим следующим `railway up`.
   Проверено вживую: `/health` 200, `/tables` 5 столов, `/leaderboard` 10 игроков.
 - **Перед 2.0:** создать проект на Railway, дать доступ к деплою; задать переменную с адресом сервера.
 - **Перед 2.3:** создать базу **PostgreSQL** на Railway; завести **OAuth-приложение в Google Cloud**
@@ -457,6 +465,23 @@ merged: —
   общий хвост лимитов 2.4; (4) zod `name`/`title` без `.max()` (фактически прикрыто `MAX_MSG_BYTES`+
   `normalizeName`) — косметика; (5) `joinOpen`-reclaim по 32-битному `playerId` без анти-перебора →
   закроется reconnect-токеном 2.4.c.
+
+### Хвосты аудита границы Вехи 2 (2026-06-22; 2.6 закрыла 2 MAJOR, миноры отложены — не блокеры)
+
+Из docs/progress/done/2.6-predeploy-hardening.md (CRITICAL — нет):
+
+- **A. dev-auth same-origin** — `/auth/*` в dev CORS-блокируются (в проде same-origin, работает). Пакетом:
+  код (`AUTH_BASE`='' + прокси `/auth`+`/auth/google`+callback в vite) + dev `redirect_uri` `localhost:5173`
+  в `.env` И в Google Cloud Console. Когда понадобится локальный тест входа.
+- `store.isHost` — мёртвое в проде (роль из `lobby.players`): убрать поле + 4 присваивания.
+- Отсчёт «Waiting for…» (60с) расходится с реальным форфейтом (sweeper 60с → до ~120с): ужать `SWEEP_EVERY_MS`
+  (10–15с) или показать запас в countdown.
+- `processed[]` растёт без границы при флуде denied-действий в чужой ход: кольцевой буфер/cap или rate-limit
+  на `MSG.action` per-socket.
+- a11y-полиш: `useFocusOnMount` на CabinetScreen; фокус h1 vs autoFocus на NicknameScreen; `<h1 sr-only>` в
+  приватном лобби; «Saved»-фидбэк после смены ника; `role="cell"` на кнопке-ячейке (из Вехи 1).
+- Код приватной комнаты в логах (~13 мест realtime.ts): хэш/префикс или debug (low). `useOpenTables` без
+  in-flight-гарда (безвредно). `sockets`-Map: старый socketId не удаляется при reclaim до ping-timeout (самолечится).
 
 ### Аудит границы Вехи 1 — хвосты (не блокеры; CRITICAL/MAJOR закрыты до мержа)
 
