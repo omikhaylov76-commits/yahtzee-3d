@@ -5,6 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
+  abandonedGameAction,
   allReadyToStart,
   canStart,
   createHouseTables,
@@ -347,5 +348,65 @@ describe('readyTimeoutAction', () => {
   it('не-готовое дольше таймаута → free (освободить место)', () => {
     const s = seat('a', { ready: false, notReadySince: 1000 });
     expect(readyTimeoutAction(s, 1000 + 60_001, 60_000)).toBe('free');
+  });
+});
+
+describe('abandonedGameAction (2.7 — уборка брошенной всеми партии)', () => {
+  const GRACE = 120_000;
+  /** Место ушедшего по ходу: сокета нет (держим за игроком до reclaim/форфейта). */
+  const gone = (pid: string): Seat => seat(pid, { socketId: null });
+
+  it('никого живого + партия ДОИГРАНА (gameOver) → persistent: reset (сразу, не ждём grace)', () => {
+    const r = room([gone('a'), gone('b')]);
+    r.visibility = 'persistent';
+    expect(abandonedGameAction(r, 1000, GRACE, true)).toBe('reset');
+  });
+
+  it('никого живого + gameOver → open и private: delete', () => {
+    const open = room([gone('a'), gone('b')]);
+    open.visibility = 'open';
+    expect(abandonedGameAction(open, 1000, GRACE, true)).toBe('delete');
+    const priv = room([gone('a'), gone('b')]); // private по умолчанию
+    expect(abandonedGameAction(priv, 1000, GRACE, true)).toBe('delete');
+  });
+
+  it('есть ЖИВОЙ игрок → null (экран победителя / «Play again» не трогаем), даже если gameOver', () => {
+    const r = room([seat('a', { socketId: 'live' }), gone('b')]);
+    r.visibility = 'persistent';
+    expect(abandonedGameAction(r, 1000, GRACE, true)).toBeNull();
+  });
+
+  it('никого живого + НЕ завершена + grace ИСТЁК → убрать (persistent: reset) — backstop', () => {
+    const r = room([gone('a'), gone('b')]);
+    r.visibility = 'persistent';
+    r.emptiedAt = 1000;
+    expect(abandonedGameAction(r, 1000 + GRACE + 1, GRACE, false)).toBe('reset');
+  });
+
+  it('никого живого + НЕ завершена + в пределах grace → null (ждём реконнект, ADR-0010)', () => {
+    const r = room([gone('a'), gone('b')]);
+    r.visibility = 'open';
+    r.emptiedAt = 1000;
+    expect(abandonedGameAction(r, 1000 + 30_000, GRACE, false)).toBeNull();
+  });
+
+  it('никого живого + НЕ завершена + emptiedAt=null → null (нет маркера брошенности)', () => {
+    const r = room([gone('a'), gone('b')]); // emptiedAt null по умолчанию
+    r.visibility = 'open';
+    expect(abandonedGameAction(r, 999_999, GRACE, false)).toBeNull();
+  });
+
+  it('пустой стол (0 мест) + gameOver → reset (noLive по длине)', () => {
+    const r = room([]);
+    r.visibility = 'persistent';
+    expect(abandonedGameAction(r, 1000, GRACE, true)).toBe('reset');
+  });
+
+  it('gameOver короткозамыкает grace: emptiedAt свежий (в пределах grace) + gameOver → всё равно убрать', () => {
+    // Пинит OR-семантику (НЕ AND): доигранную партию убираем сразу, не дожидаясь grace.
+    const r = room([gone('a'), gone('b')]);
+    r.visibility = 'open';
+    r.emptiedAt = 1000; // только что опустел
+    expect(abandonedGameAction(r, 1000 + 5_000, GRACE, true)).toBe('delete');
   });
 });

@@ -154,6 +154,26 @@ export function readyTimeoutAction(
   return now - seat.notReadySince > timeoutMs ? 'free' : null;
 }
 
+/**
+ * Что сделать с БРОШЕННОЙ ВСЕМИ партией (2.7): при отсутствии живых сокетов убрать стол, если партия либо
+ * УЖЕ доиграна (`gameOver`: форфейтом/естественно — реконнектиться не к чему), либо брошена дольше grace на
+ * реконнект (ADR-0010). `'reset'` — для persistent (вернуть дежурный стол в лобби), `'delete'` — для прочих
+ * (open/private — снос), иначе `null` (есть живые / ещё ждём в пределах grace). `gameOver` передаёт
+ * вызывающий (`module.isGameOver(state)`), чтобы не тянуть игровой модуль в seating. Чистая → тестируема.
+ */
+export function abandonedGameAction(
+  room: Room,
+  now: number,
+  graceMs: number,
+  gameOver: boolean,
+): 'reset' | 'delete' | null {
+  const noLive = room.seats.length === 0 || room.seats.every((s) => s.socketId === null);
+  if (!noLive) return null;
+  const graceElapsed = room.emptiedAt !== null && now - room.emptiedAt > graceMs;
+  if (!gameOver && !graceElapsed) return null;
+  return room.visibility === 'persistent' ? 'reset' : 'delete';
+}
+
 /** Дежурные (persistent) столы сервера (ADR-0017): 5 постоянных, морская тема в тон Auros. */
 export const HOUSE_TABLES: readonly { id: string; title: string }[] = [
   { id: 'house-1', title: 'Tide Table' },

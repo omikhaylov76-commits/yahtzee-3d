@@ -32,6 +32,7 @@ import {
 } from '../../shared/protocol';
 import { applyForfeitTurn, applyNetworkAction, startGame, type YahtzeeModule } from './rooms';
 import {
+  abandonedGameAction,
   allReadyToStart,
   canStart,
   createHouseTables,
@@ -68,7 +69,7 @@ const MAX_ROOMS = 500; // cap активных комнат на процесс 
 const LOBBY_TTL_MS = 30 * 60_000; // заброшенное лобби (создали и не стартовали) подметаем
 const GAME_GRACE_MS = 2 * 60_000; // идущую партию без живых держим столько на реконнект (ADR-0010)
 const FORFEIT_MS = 60_000; // ушедшего В ПАРТИИ ждём столько, потом сервер доигрывает за него (форфейт, ADR-0010)
-const SWEEP_EVERY_MS = 60_000; // период сборки мусора комнат
+const SWEEP_EVERY_MS = 15_000; // период сборки мусора комнат (2.7: чаще → форфейт/уборка реагируют резвее)
 const MAX_JOIN_FAILS = 10; // анти-перебор кода: после серии неуспешных join сокет временно «залочен»
 const JOIN_LOCK_MS = 30_000;
 const MAX_CREATE_PER_SOCKET = 20; // анти-спам создания комнат с одного соединения
@@ -300,14 +301,19 @@ export function attachRealtime(
         // ПОТОМ доиграть за просроченных отсутствующих (таймер дропа, 2.4.c-2) — даже если живые ещё
         // есть (ход мог застрять на ушедшем); затем снос брошенной всеми партии по grace.
         runForfeits(room, now);
-        if (noLive && room.emptiedAt !== null && now - room.emptiedAt > GAME_GRACE_MS) {
-          // Брошенную партию дежурного стола НЕ удаляем — возвращаем стол в лобби (он постоянный, ADR-0017).
-          if (room.visibility === 'persistent') {
+        // Убрать брошенную ВСЕМИ партию (2.7): сразу если она УЖЕ доиграна (форфейтом/естественно —
+        // реконнектиться не к чему), иначе по grace на реконнект (ADR-0010). Решение — чистая
+        // abandonedGameAction; persistent → вернуть стол в лобби (постоянный, ADR-0017), иначе снос.
+        const gameOver = module.isGameOver(room.game.state);
+        const sweep = abandonedGameAction(room, now, GAME_GRACE_MS, gameOver);
+        if (sweep !== null) {
+          const reason = gameOver ? 'finished' : 'grace elapsed'; // диагностика: убрали сразу vs по grace
+          if (sweep === 'reset') {
             resetRoomToLobby(room);
-            log.info({ roomId: id }, 'house table reset to lobby (abandoned game)');
+            log.info({ roomId: id, reason }, 'house table reset to lobby (abandoned game)');
           } else {
             rooms.delete(id);
-            log.info({ roomId: id }, 'abandoned game swept (grace elapsed)');
+            log.info({ roomId: id, reason }, 'abandoned game swept');
           }
         }
       }
